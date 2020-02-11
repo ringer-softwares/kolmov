@@ -8,5 +8,4 @@ ln -s ../Gaugi/python Gaugi
 ln -s ../kolmov/python kolmov
 
 export PYTHONPATH=`pwd`:$PYTHONPATH
-export JUPYTER_PATH=$PYTHONPATH
 cd ../
