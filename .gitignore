@@ -56,3 +56,8 @@ target/
 .mypy_cache/
 
 .env
+
+# gitmodules
+*.bak
+.__python__/
+.gitmodules
