@@ -60,4 +60,3 @@ target/
 # gitmodules
 *.bak
 .__python__/
-.gitmodules
