@@ -28,7 +28,7 @@ class table_info( object ):
     '''
     def __init__(self, path_to_task_files, config_dict, tag): 
         '''
-        Arguments.
+        Arguments:
         - path_to_task_files: the path to the files that will be used in the extraction
 
         Ex.: /volume/v1_task/user.mverissi.*/* 
@@ -81,15 +81,33 @@ class table_info( object ):
 
 
     def get_etbin(self, job):
+        '''
+        A simple method to get the et bin in for a task.
+        Arguments:
+        -job: A item of tuned_file_list
+        '''
         return int(re.findall(r'et[a]?[0-9]', job.split('/')[-2])[0][-1])
 
     def get_etabin(self, job):
+        '''
+        A simple method to get the eta bin in for a task.
+        Arguments:
+        -job: A item of tuned_file_list
+        '''
         return int(re.findall(r'et[a]?[0-9]', job.split('/')[-2])[1][-1])
 
     def get_file_name(self, job):
+        '''
+        A simple method to get the name of the job file.
+        Arguments:
+        -job: A item of tuned_file_list
+        '''
         return job.split('/')[-1]
 
     def fill_table(self):
+        '''
+        This method will fill the information dictionary and convert then into a pandas DataFrame.
+        '''
         print('Filling the table... ')
         for ituned_file_name in self.tuned_file_list:
             gfile = gload(ituned_file_name)
@@ -121,27 +139,74 @@ class table_info( object ):
         print('End of fill step, a pandas DataFrame was created...')
 
     def get_pandas_table(self):
+        '''
+        Return the pandas table created in fill_table
+        '''
         return self.pandas_table
 
     def filter_inits(self, key):
+        '''
+        This method will filter the pandas DataFrame in order to get the best initialization for
+        each sort. This filter need a key to ordenate the initialization and filter.
+        Arguments:
+        -key: a measure to use for filter the initializations
+
+        Ex.: 
+        # create a table_info
+        Example = table_info(my_task_full_name, my_tuned_info, tag='my_flag')
+        # fill table
+        Example.fill_table()
+        # now filter the inits using a max_sp_val
+        my_df = Example.filter_inits(key='max_sp_val')
+
+        In this example my_df is a pandas DataFrame with the best intilization sorted by 'max_sp_val'.
+
+        '''
         return self.pandas_table.loc[self.pandas_table.groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax(), :]
     
     def dump_table(self, cv_table, output_path, table_name):
+        '''
+        A method to save the pandas DataFrame created by table_info into a .csv file.
+        Arguments:
+        - cv_table: the table created (and filtered) by table_info;
+        - output_path: the file destination;
+        - table_name: the file name;
+
+        Ex.:
+        # create a table_info
+        Example = table_info(my_task_full_name, my_tuned_info, tag='my_flag')
+        # fill table
+        Example.fill_table()
+        # now filter the inits using a max_sp_val
+        my_df = Example.filter_inits(key='max_sp_val')
+        # now save my_df
+        Example.dump_table(my_df, my_path, 'a_very_meaninful_name')
+
+        In this example, a file containing my_df, called 'a_very_meaninful_name.csv', will be saved in my_path
+        '''
         cv_table.to_csv(os.path.join(output_path, table_name+'.csv'), index=False)
 
 
 def dump_train_history(dataframe, 
                         et_bin, eta_bin, 
                         modelidx, sort, path_to_task, output_path):
+    '''
+    This function get the job file search for the right model, init and sort and dump the
+    training history into a json file.
+    Arguments:
+    - dataframe: a pandas DataFrame which contains the tuning information;
+    - et_bin: the et bin index;
+    - eta_bin: the eta bin index;
+    - modelidx: the model index;
+    - sort: the sort index;
+    - path_to_task: the path to the job files;
+    - output_path: the destination path.
+    '''
     # format the task path    
     path_to_task = path_to_task %(et_bin, eta_bin)
     
     # get the job file name and the init for the sort
-    print(dataframe.loc[((dataframe.et_bin==eta_bin)     & \
-                                        (dataframe.eta_bin==eta_bin)    & \
-                                        (dataframe.model_idx==modelidx) & \
-                                        (dataframe.sort==sort)          ), ['init', 'file_name']].values[0])
-    init, job_name     = dataframe.loc[((dataframe.et_bin==eta_bin)     & \
+    init, job_name     = dataframe.loc[((dataframe.et_bin==et_bin)      & \
                                         (dataframe.eta_bin==eta_bin)    & \
                                         (dataframe.model_idx==modelidx) & \
                                         (dataframe.sort==sort)          ), ['init', 'file_name']].values[0]
@@ -159,13 +224,17 @@ def dump_train_history(dataframe,
                 json.dump(transform_serialize(_i['history']), fp)
 
 def dump_all_train_history(dataframe, path_to_task, output_path):
-
+    '''
+    This function get all history for each (et, eta) bin and save into a json file.
+    Arguments:
+    - dataframe: a pandas DataFrame which contains the tuning information;
+    - path_to_task: the path to the job files;
+    - output_path: the destination path.
+    '''
     for iet in dataframe.et_bin.unique():
         for ieta in dataframe.eta_bin.unique():
             for isort in dataframe.sort.unique():
                 for imodel in dataframe.model_idx.unique():
-                    print('et: %i | eta: %i | sort: %i | model: %i' %(iet, ieta,
-                                                                      isort, imodel) )
                     dump_train_history(dataframe,
                                        et_bin=iet, eta_bin=ieta,
                                        sort=isort, modelidx=imodel,
