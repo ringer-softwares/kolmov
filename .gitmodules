@@ -1,4 +1,0 @@
-[submodule "Gaugi"]
-	path = Gaugi
-	url    = https://github.com/jodafons/Gaugi.git
-	ignore = dirty
