@@ -16,7 +16,7 @@ class plot_monitoring(object):
     Its use the dumped json history of a trained model. If you don't have this json
     use the dump_all_train_history from base_table in kolmov.
     '''
-    def __init__(self, path_to_history, model_idx):
+    def __init__(self, path_to_history, model_idx, low_et=True):
         '''
         Arguments:
         - path_to_history: the path to json history files
@@ -27,6 +27,9 @@ class plot_monitoring(object):
 
         Ex.: model_idx = 0 
         In this example 0 is the first model from a list of tested model.
+
+        - low_et: a flag to use Jpsi eT kinematic region or Zee. Default is True and
+        Jpsi region is used. If you need use the Zee kinematic region set this flag to False.
         '''
         self.list_h_files = (glob
                             .glob(os
@@ -41,10 +44,17 @@ class plot_monitoring(object):
         self.h_dict         = self.open_history()
         self.sort_name_dict =  {idx : 'Fold %i' %(idx+1) for idx in range(10)}
         # set the real ranges in kinematic regions 
-        # when use the zee please add a flag to point to another et_range list.
-        self.et_range = ['[4, 7[ GeV',
-                         '[7, 10[ GeV',
-                        '[10, 15[ GeV']
+        # check if is Zee eT bins or Jpsi.
+        if not low_et: #Zee
+            self.et_range = ['[15, 20[ GeV',
+                            '[20, 30[ GeV',
+                            '[30, 40[ GeV',
+                            '[40, 50[ GeV',
+                            r'[50, $\infty$[']
+        else: # Jpsi - now is the default
+            self.et_range = ['[4, 7[ GeV',
+                            '[7, 10[ GeV',
+                            '[10, 15[ GeV']
         self.eta_range = ['[0.0, 0.8[',
                           '[0.8, 1.37[',
                           '[1.37, 1.54[',
