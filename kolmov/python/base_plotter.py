@@ -10,8 +10,24 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 class plot_monitoring(object):
+    '''
+    This class is a little monitoring tool for saphyra trained models.
 
+    Its use the dumped json history of a trained model. If you don't have this json
+    use the dump_all_train_history from base_table in kolmov.
+    '''
     def __init__(self, path_to_history, model_idx):
+        '''
+        Arguments:
+        - path_to_history: the path to json history files
+
+        Ex.: /my_volume/my_history_files
+
+        - model_idx: the index of model that you want extract the monitoring info.
+
+        Ex.: model_idx = 0 
+        In this example 0 is the first model from a list of tested model.
+        '''
         self.list_h_files = (glob
                             .glob(os
                             .path
@@ -24,23 +40,28 @@ class plot_monitoring(object):
             }
         self.h_dict         = self.open_history()
         self.sort_name_dict =  {idx : 'Fold %i' %(idx+1) for idx in range(10)}
-        # set the real ranges in kinematic regions
+        # set the real ranges in kinematic regions 
+        # when use the zee please add a flag to point to another et_range list.
         self.et_range = ['[4, 7[ GeV',
                          '[7, 10[ GeV',
                         '[10, 15[ GeV']
         self.eta_range = ['[0.0, 0.8[',
                           '[0.8, 1.37[',
                           '[1.37, 1.54[',
-                          '[1.54, 2.37',
+                          '[1.54, 2.37[',
                           '[2.37, 2.47[']
 
     def open_history(self):
+        '''
+        This method will open all the histories that was grouped in the initialize method, 
+        and put then into a dictionary in order to make easier to manipulate.
+        '''
         h_dict = {}
         for h_file in self.list_h_files:
             f_split         = h_file.split('.')
             et_bin, eta_bin = f_split[0].split('_')[-2], f_split[0].split('_')[-1]
             sort_           = f_split[-2]
-            key             = '%s_%s_%s' %(et_bin, eta_bin, sort_)
+            key             = '%s_%s_%s' %(et_bin, eta_bin, sort_)dump_all_train_history
             with open(h_file) as jfile:
                 h_dict[key] = json.load(jfile)
 
@@ -48,7 +69,21 @@ class plot_monitoring(object):
 
 
     def plot_monitoring_curves(self, et_bin, eta_bin, plot_path, plot_name):
-        
+        '''
+        Arguments:
+        - et_bin: the energy bin index.
+        - eta_bin: the pseudorapidity bin index.
+        - plot_path: the path to save the plot.
+        - plot_name: the plot name.
+
+        Ex.: 
+        # initialize the base_ploter class
+        plot_tool = plot_monitoring('my_path/awesome_history', model_idx=0)
+        # now plot some bin
+        plot_tool.plot_monitoring_curves(et_bin=0,
+                                        eta_bin=0,
+                                        plot_path=my_save_path, plot_name=a_very_meaningful_name)
+        '''
         # a easy way to lock only in the necessaries keys
         wanted_h_keys = ['et%i_eta%i_sort_%i' %(et_bin, eta_bin, i) for i in range(10)]
         # train indicators (today we use only this)

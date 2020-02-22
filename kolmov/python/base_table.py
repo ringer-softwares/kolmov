@@ -180,9 +180,9 @@ class table_info( object ):
         # now filter the inits using a max_sp_val
         my_df = Example.filter_inits(key='max_sp_val')
         # now save my_df
-        Example.dump_table(my_df, my_path, 'a_very_meaninful_name')
+        Example.dump_table(my_df, my_path, 'a_very_meaningful_name')
 
-        In this example, a file containing my_df, called 'a_very_meaninful_name.csv', will be saved in my_path
+        In this example, a file containing my_df, called 'a_very_meaningful_name.csv', will be saved in my_path
         '''
         cv_table.to_csv(os.path.join(output_path, table_name+'.csv'), index=False)
 
