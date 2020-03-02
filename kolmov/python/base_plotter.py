@@ -14,7 +14,7 @@ class plot_monitoring(object):
     This class is a little monitoring tool for saphyra trained models.
 
     Its use the dumped json history of a trained model. If you don't have this json
-    use the dump_all_train_history from base_table in kolmov.
+    use the dump_all_traiplot_monitoringn_history from base_table in kolmov.
     '''
     def __init__(self, path_to_history, model_idx, low_et=True):
         '''
@@ -71,7 +71,7 @@ class plot_monitoring(object):
             f_split         = h_file.split('.')
             et_bin, eta_bin = f_split[0].split('_')[-2], f_split[0].split('_')[-1]
             sort_           = f_split[-2]
-            key             = '%s_%s_%s' %(et_bin, eta_bin, sort_)dump_all_train_history
+            key             = '%s_%s_%s' %(et_bin, eta_bin, sort_)
             with open(h_file) as jfile:
                 h_dict[key] = json.load(jfile)
 
