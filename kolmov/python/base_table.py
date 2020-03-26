@@ -10,7 +10,8 @@ import json
 
 # Gaugi dependences
 from Gaugi import load as gload
-
+import collections
+from copy import copy
 
 def transform_serialize(d_dict):
     for ikey in d_dict.keys():
@@ -26,7 +27,7 @@ class table_info( object ):
     The informations used in this DataFrame are listed in info_dict, but the user can add more
     information from saphyra summary for example.
     '''
-    def __init__(self, path_to_task_files, config_dict, tag): 
+    def __init__(self, path_to_task_files, wanted_keys, tag): 
         '''
         Arguments:
         - path_to_task_files: the path to the files that will be used in the extraction
@@ -34,50 +35,64 @@ class table_info( object ):
         Ex.: /volume/v1_task/user.mverissi.*/* 
         the example above will get all the tuned files in the v1_task folder
 
-        - config_dict: a dictionary contains in keys the measures that user want to check and
+        - wanted_keys: a dictionary contains in keys the measures that user want to check and
         the values need to be a empty list.
 
-        Ex.: my_info = {
-                            # validation
-                            'max_sp_val'     : [],
-                            'max_sp_pd_val'  : [],
-                            'max_sp_fa_val'  : [],
-                            'auc_val'        : [],
-                            # operation
-                            'max_sp_op'     : [],
-                            'max_sp_pd_op'  : [],
-                            'max_sp_fa_op'  : [],
-                            'auc_op'        : [],
-                        }
+        Ex.: my_info = collections.OrderedDict( {
+              
+              "max_sp_val"      : 'summary/max_sp_val',
+              "max_sp_pd_val"   : 'summary/max_sp_pd_val#0',
+              "max_sp_fa_val"   : 'summary/max_sp_fa_val#0',
+              "max_sp_op"       : 'summary/max_sp_op',
+              "max_sp_pd_op"    : 'summary/max_sp_pd_op#0',
+              "max_sp_fa_op"    : 'summary/max_sp_fa_op#0',
+              'tight_pd_ref'    : "reference/tight_cutbased/pd_ref#0",
+              'tight_fa_ref'    : "reference/tight_cutbased/fa_ref#0",
+              } )
 
         - tag: a tag for the tuning
 
         Ex.: v1
-
         '''
-        self.info_dict    = {
-            'train_tag'      : [],
-            'et_bin'         : [],
-            'eta_bin'        : [],
-            'model_idx'      : [],
-            'sort'           : [],
-            'init'           : [],
-            # file name
-            'file_name'      : [],
-            # total
-            'total_sgn'      : [],
-            'total_bkg'      : [],
-        }
-        self.tuned_file_list = glob.glob(path_to_task_files)
+
         self.tag             = tag
-        self.config_dict     = config_dict
-        self.info_dict.update(self.config_dict)
-        self.util_dict = {
-            # total
-            'total_sgn'     : ('max_sp_pd_op', 2),
-            'total_bkg'     : ('max_sp_fa_op', 2),
-        }
+        self.tuned_file_list = glob.glob(path_to_task_files)
+        # Check wanted key type 
+        if type(wanted_keys) is not collections.OrderedDict:
+          TypeError("The wanted key must be an collection.OrderedDict to preserve the order inside of the dataframe.")
+        self.wanted_keys     = wanted_keys
+
+        self.dataframe    = collections.OrderedDict({
+                              'train_tag'      : [],
+                              'et_bin'         : [],
+                              'eta_bin'        : [],
+                              'model_idx'      : [],
+                              'sort'           : [],
+                              'init'           : [],
+                              'file_name'      : [],
+                          })
+
+
+        self.wanted_keys.update(
+          {
+            'total_sgn'     : 'summary/max_sp_pd_op#2',
+            'total_bkg'     : 'summary/max_sp_fa_op#2',
+          }
+        )
+        
+        self.configure()
         print('There are %i files for this task...' %(len(self.tuned_file_list)))
+
+    
+    def configure(self):
+      '''
+      Configure all keys into the dataframe.
+      '''
+      for key in self.wanted_keys:
+        # varname:summary/var1#2
+        varname = key.split(':')[0] 
+        # Add varname to the dataframe
+        self.dataframe[varname] = [] 
 
 
     def get_etbin(self, job):
@@ -113,36 +128,39 @@ class table_info( object ):
             gfile = gload(ituned_file_name)
             tuned_file = gfile['tunedData']
             for ituned in tuned_file:
-                summary_dict = ituned['history']['summary']
+                history = ituned['history']
                 # get the basic from model
-                self.info_dict['train_tag'].append(self.tag)
-                self.info_dict['model_idx'].append(ituned['imodel'])
-                self.info_dict['sort'].append(ituned['sort'])
-                self.info_dict['init'].append(ituned['init'])
-                self.info_dict['et_bin'].append(self.get_etbin(ituned_file_name))
-                self.info_dict['eta_bin'].append(self.get_etabin(ituned_file_name))
-                self.info_dict['file_name'].append(self.get_file_name(ituned_file_name))
-                for t_key in self.util_dict.keys():
-                    key, tuple_idx = self.util_dict[t_key]
-                    self.info_dict[t_key].append(summary_dict[key][tuple_idx])
-                # get the wanted measures
-                for imeasure in self.config_dict.keys():
-                    if imeasure in list(self.util_dict.keys()):
-                        key, tuple_idx = self.util_dict[imeasure] 
-                        self.info_dict[imeasure].append(summary_dict[key][tuple_idx])
-                    elif isinstance(summary_dict[imeasure], tuple):
-                        self.info_dict[imeasure].append(summary_dict[imeasure][0])
-                    else:
-                        self.info_dict[imeasure].append(summary_dict[imeasure])
-                
-        self.pandas_table = pd.DataFrame(self.info_dict)
+                self.dataframe['train_tag'].append(self.tag)
+                self.dataframe['model_idx'].append(ituned['imodel'])
+                self.dataframe['sort'].append(ituned['sort'])
+                self.dataframe['init'].append(ituned['init'])
+                self.dataframe['et_bin'].append(self.get_etbin(ituned_file_name))
+                self.dataframe['eta_bin'].append(self.get_etabin(ituned_file_name))
+                self.dataframe['file_name'].append(self.get_file_name(ituned_file_name))
+                # Get the value for each wanted key passed by the user in the contructor args.
+                for key, local  in self.wanted_keys.items():
+                  self.dataframe[key].append( self.get_value( history, local ) )
+
+        self.pandas_table = pd.DataFrame(self.dataframe)
         print('End of fill step, a pandas DataFrame was created...')
 
+
+    def get_value(self, history, local):
+        '''
+        Return the value using recursive navigation
+        '''
+        # Protection to not override the history since this is a 'mutable' object
+        var = copy(history)
+        for key in local.split('/'):
+            var = var[key.split('#')[0]][int(key.split('#')[1])] if '#' in key else var[key]
+        return var
+    
     def get_pandas_table(self):
         '''
         Return the pandas table created in fill_table
         '''
         return self.pandas_table
+
 
     def filter_inits(self, key):
         '''
@@ -163,7 +181,48 @@ class table_info( object ):
 
         '''
         return self.pandas_table.loc[self.pandas_table.groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax(), :]
-    
+   
+
+
+    def calculate_mean_and_std(self, cv_table, wanted_keys):
+        '''
+        Calculate the mean and std for wanted keys with val and op suffix.
+        This functions is usefull to check the fluctuation for some keys for
+        all sorts inside a bin/tuning.
+        '''
+        print( "Calculate mean and std values for this table.")
+        # Create a new dataframe to hold this table
+        dataframe = { 'train_tag' : [], 'et_bin' : [], 'eta_bin' : []}
+        # Include all wanted keys into the dataframe
+        for key in wanted_keys:
+          if ('op' in key) or ('val' in key):
+            # Insert mean and std column for val and op keys
+            dataframe[key+'_mean'] = []
+            dataframe[key+'_std'] = []
+          else:
+            dataframe[key] = []
+
+        # Loop over all tuning tags and et/eta bins
+        for tag in cv_table['train_tag'].unique():
+            for et_bin in cv_table['et_bin'].unique():
+                for eta_bin in cv_table['eta_bin'].unique():
+                  # Filter by tag, et_bin and eta_bin
+                  cv_bin = cv_table.loc[ (cv_table['train_tag'] == tag) & (cv_table['et_bin'] == et_bin) & (cv_table['eta_bin'] == eta_bin) ]
+                  dataframe['train_tag'].append( tag )
+                  dataframe['et_bin'].append( et_bin )
+                  dataframe['eta_bin'].append( eta_bin )
+                  for key in wanted_keys:
+                      if ('op' in key) or ('val' in key):
+                          dataframe[key+'_mean'].append( cv_bin[key].mean() )
+                          dataframe[key+'_std'].append( cv_bin[key].std() )
+                      else:
+                          dataframe[key].append( cv_bin[key].unique()[0] )
+        # Return the pandas dataframe
+        return pd.DataFrame(dataframe)
+
+
+
+
     def dump_table(self, cv_table, output_path, table_name):
         '''
         A method to save the pandas DataFrame created by table_info into a .csv file.
@@ -185,6 +244,7 @@ class table_info( object ):
         In this example, a file containing my_df, called 'a_very_meaningful_name.csv', will be saved in my_path
         '''
         cv_table.to_csv(os.path.join(output_path, table_name+'.csv'), index=False)
+
 
 
 def dump_train_history(dataframe, 
