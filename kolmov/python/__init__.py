@@ -1,9 +1,18 @@
 __all__ = []
 
-from . import base_table
-__all__.extend( base_table.__all__              )
-from .base_table import *
 
-from . import base_plotter
-__all__.extend( base_plotter.__all__              )
-from .base_plotter import *
+from . import ktable
+__all__.extend( ktable.__all__ )
+from .ktable import *
+
+
+from . import kplot
+__all__.extend( kplot.__all__ )
+from .kplot import *
+
+
+from . import constants
+__all__.extend( constants.__all__ )
+from .constants import *
+
+
