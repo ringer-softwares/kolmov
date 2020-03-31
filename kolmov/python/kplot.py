@@ -1,5 +1,5 @@
 
-__all__ = ['kplot']
+__all__ = ['kplot', 'kquadrant_pocket']
 
 import os
 import glob
@@ -127,3 +127,67 @@ class kplot( Logger ):
                     bbox_inches='tight')
 
 
+def kquadrant_pocket(df, plot_configs, output_path='/volume'):
+    '''
+    This function will provide a simple implementation of prometheus quadrant analysis
+    applying conditions on Dataframe.
+
+    Arguments:
+    - df: the Dataframe used to extract information;
+    - plot_configs: a dictionary which contains the all plot information and the
+    condition to produce the plot;
+    - outpu_path: the path to save the plot.
+    '''
+    for ivar in plot_configs.keys():
+        print('Plotting %s... ' %(ivar))
+        local_config = plot_configs[ivar]
+        # loop over variables
+        var_cond1 = df[((local_config['cond1']) &\
+                        (local_config['common_cond']))][ivar].values
+        var_cond1 = var_cond1[((var_cond1 >= local_config['low_edge']) &\
+                               (var_cond1 <= local_config['high_edge']))]
+
+        var_cond2 = df[((local_config['cond2']) &\
+                        (local_config['common_cond']))][ivar].values 
+        var_cond2 = var_cond2[((var_cond2 >= local_config['low_edge']) &\
+                               (var_cond2 <= local_config['high_edge']))]
+
+        fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(8, 6))
+
+        fig.suptitle(r'%s Distribution Comparision - %s | %s' %(local_config['var_name'],
+                                                                local_config['title_tag1'],
+                                                                local_config['title_tag2']),
+                    fontsize=20)
+
+        ns, bins, patches =  ax1.hist([var_cond1, var_cond2], normed=False,
+                                    bins=local_config['nbins'],
+                                    color=['blue', 'red'],
+                                    histtype='step', 
+                                    alpha=.5,
+                                    label=[local_config['cond1_label'],
+                                           local_config['cond2_label']],
+                                    lw=2)
+        ax1.legend(loc='upper left')
+
+        # ratio plot - vulgo puchadinho
+        ax2.plot(bins[:-1],     # this is what makes it comparable
+                100*(ns[1] / ns[0]), # maybe check for div-by-zero!
+                '^', 
+                color='black')
+
+
+        ax1.set_ylabel('Counts', fontsize=15)
+        ax2.set_ylabel('Ratio', fontsize=15)
+        ax1.set_yscale('log')
+        ax2.set_yscale('log')
+        ax2.set_xlabel(r'%s' %(local_config['var_name']), fontsize=15)
+        # at this time we don't need this
+        # ax1.set_xticks(np.arange(start=-0.05, stop=0.06, step=1e-2))
+        # ax2.set_xticks(np.arange(start=-0.05, stop=0.06, step=1e-2))
+        ax1.set_xlim([local_config['low_edge'], local_config['high_edge']])
+        ax2.set_xlim([local_config['low_edge'], local_config['high_edge']])
+        ax2.grid()
+        ax1.grid()
+        plt.savefig(os.path.join(output_path,
+                                '%s_mini_quad.png' %(ivar)),
+                    dpi=300)

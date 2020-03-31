@@ -81,6 +81,8 @@ class first_export_tool(object):
         from the operation dataframe and using the ringer data to calculate the threshold.
         '''
         self.models = {}
+        # add the noHAD flag
+        self.models['noHAD'] = self.noHAD
         for iet, ieta in product(range(self.op_df.et_bin.nunique()),
                                  range(self.op_df.eta_bin.nunique())):
             print('Processing et bin: %i | eta bin: %i' %(iet, ieta))
