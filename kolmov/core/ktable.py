@@ -1,8 +1,6 @@
 
 
-__all__ = [
-    'ktable'
-]
+__all__ = ['ktable']
 
 
 from Gaugi.messenger.macros import *
@@ -17,7 +15,7 @@ import pandas as pd
 
 class ktable( Logger ):
 
-    def __init__(self, path, config_dict, tag=None): 
+    def __init__(self, config_dict): 
         
         '''
         The objective of this class is extract the tuning information from saphyra's output and
@@ -66,24 +64,26 @@ class ktable( Logger ):
 
         '''
         Logger.__init__(self)
-        self.__tag = tag
         self.__config_dict = config_dict
+        self.pandas_table = None
         # Check wanted key type 
         if type(config_dict) is not collections.OrderedDict:
           MSG_FATAL( self ,"The wanted key must be an collection.OrderedDict to preserve the order inside of the dataframe.")
-        self.__fill_table( path )
+        #self.__fill_table( path )
 
 
 
     #
     # Fill the main dataframe with values from the tuning files and convert to pandas dataframe
     #
-    def __fill_table(self, basepath):
+    def fill(self, basepath, tag):
         '''
         This method will fill the information dictionary and convert then into a pandas DataFrame.
         '''
         paths = expandFolders( basepath )
-        
+       
+        MSG_INFO(self, "Reading file for %s tag...", tag )
+
         # Creating the dataframe
         dataframe = collections.OrderedDict({
                               'train_tag'      : [],
@@ -106,14 +106,6 @@ class ktable( Logger ):
         for ituned_file_name in paths:
             gfile = load(ituned_file_name)
             tuned_file = gfile['tunedData']
-
-            # Protection in case of the tuning file has not tag and you not passed some one in the constructor
-            if not 'tag' in gfile.keys() and not self.__tag:
-                MSG_FATAL( self, "This tuning file has not tag and you not passed one tag as arg in the constructor. abort." +  
-                                 "You shold include one tag by hand using add_tag.py script or pass some one in the constructor.")
-
-            # Get the tuning tag
-            tag = self.__tag if self.__tag else gfile['tag']
             
             for idx, ituned in enumerate(tuned_file):
                 history = ituned['history']
@@ -130,7 +122,7 @@ class ktable( Logger ):
                 for key, local  in self.__config_dict.items():
                     dataframe[key].append( self.__get_value( history, local ) )
         
-        self.pandas_table = pd.DataFrame(dataframe)
+        self.pandas_table = self.pandas_table.append( pd.DataFrame(dataframe) ) if not self.pandas_table is None else pd.DataFrame(dataframe)
         MSG_INFO(self, 'End of fill step, a pandas DataFrame was created...')
 
 
@@ -154,7 +146,9 @@ class ktable( Logger ):
         Arguments:
         -job: A item of tuned_file_list
         '''
-        return int(re.findall(r'et[a]?[0-9]', job.split('/')[-2])[0][-1])
+        #print(re.findall(r'et[a]?[0-9]', job))
+        #return int(re.findall(r'et[a]?[0-9]', job.split('/')[-2])[0][-1])
+        return int(  re.findall(r'et[a]?[0-9]', job)[0][-1] )
 
 
     def get_etabin(self, job):
@@ -163,7 +157,9 @@ class ktable( Logger ):
         Arguments:
         -job: A item of tuned_file_list
         '''
-        return int(re.findall(r'et[a]?[0-9]', job.split('/')[-2])[1][-1])
+        #print(re.findall(r'et[a]?[0-9]', job))
+        #return int(re.findall(r'et[a]?[0-9]', job.split('/')[-2])[1][-1])
+        return int( re.findall(r'et[a]?[0-9]',job)[1] [-1] )
 
 
 
