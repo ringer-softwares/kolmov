@@ -13,4 +13,4 @@ install:
   - easy_install .
 
 script:
-  - python3 ci/main.py
+  - ci/ci_main.sh
