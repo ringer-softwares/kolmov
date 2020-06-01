@@ -313,7 +313,9 @@ class ktable( Logger ):
     #
     # Dump beamer table
     #
-    def dump_beamer_table( self, pandas_best_inits, etbins, etabins, operation_points, tags=None ):
+    def dump_beamer_table( self, pandas_best_inits,
+                           etbins, etabins, operation_points,
+                           output_file_name='beamer_pdf', tags=None ):
        
         cv_table = self.describe( pandas_best_inits )
 
@@ -329,7 +331,7 @@ class ktable( Logger ):
             config_dict[operation_point][ 'pd_ref' ] = operation_point + '_pd_ref'
             config_dict[operation_point][ 'sp_ref' ] = operation_point + '_sp_ref'
             config_dict[operation_point][ 'fa_ref' ] = operation_point + '_fa_ref'
-          
+
         # Create Latex Et bins
         etbins_str = []; etabins_str = []
         for etBinIdx in range(len(etbins)-1):
@@ -351,7 +353,7 @@ class ktable( Logger ):
       
         # Dictionary to hold all eff values for each operation point, tag and et/eta binning
         summary = {}
-      
+        
         # Create the summary with empty values
         for operation_point in config_dict.keys():
             summary[operation_point] = {}
@@ -361,7 +363,7 @@ class ktable( Logger ):
                     for etaBinIdx in range(len(etabins)-1):
                         for key in config_dict[operation_point]:
                             summary[operation_point][tag][etBinIdx][etaBinIdx][key] = 0.0
-      
+
         # Fill the summary
         for operation_point in config_dict.keys():
             for tag in train_tags:
@@ -377,8 +379,8 @@ class ktable( Logger ):
         # Apply beamer
         with BeamerTexReportTemplate1( theme = 'Berlin'
                                  , _toPDF = True
-                                 , title = ''
-                                 , outputFile = 'test'
+                                 , title = 'Cross Validation Table'
+                                 , outputFile = output_file_name
                                  , font = 'structurebold' ):
         
             for operation_point in summary.keys():
@@ -401,7 +403,7 @@ class ktable( Logger ):
                             sp = d['sp_val_mean']*100; sp_std = d['sp_val_std']*100
                             pd = d['pd_val_mean']*100; pd_std = d['pd_val_std']*100
                             fa = d['fa_val_mean']*100; fa_std = d['fa_val_std']*100
-                            refsp = d['sp_ref']; refpd = d['pd_ref']; reffa = d['fa_ref']
+                            refsp = d['sp_ref']*100; refpd = d['pd_ref']*100; reffa = d['fa_ref']*100
                             cv_values   += [ colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorSP+('%1.2f$\pm$%1.2f')%(sp,sp_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std),    ]
                             ref_values  += [ colorPD+('%1.2f')%(refpd), colorSP+('%1.2f')%(refsp), colorPF+('%1.2f')%(reffa)]
                         ### Make summary table
@@ -420,7 +422,7 @@ class ktable( Logger ):
                 lines2 = []
                 lines2 += [ HLine(_contextManaged = False) ]
                 lines2 += [ HLine(_contextManaged = False) ]
-                lines2 += [ TableLine( columns = ['',colorPD+r'$P_{D}[\%]$',colorPF+r'$F_{a}[\%]$'], _contextManaged = False ) ]
+                lines2 += [ TableLine( columns = ['',colorPD+r'$P_{D}[\%]$',colorPF+r'$P_{F}[\%]$'], _contextManaged = False ) ]
                 lines2 += [ HLine(_contextManaged = False) ]
                 for idx, tag in enumerate( train_tags ):
                     itable = self.integrate( pandas_best_inits, tag )
@@ -440,7 +442,7 @@ class ktable( Logger ):
                 # Create all tables into the PDF Latex 
                 with BeamerSection( name = operation_point.replace('_','\_') ):
                     with BeamerSlide( title = "The Cross Validation Efficiency Values For All Tunings"  ):          
-                        with Table( caption = 'The $P_{d}$, $F_{a}$ and $SP $ values for each phase space for each method.') as table:
+                        with Table( caption = 'The $P_{D}$, $P_{F}$ and $SP $ values for each phase space for each method.') as table:
                             with ResizeBox( size = 1. ) as rb:
                                 with Tabular( columns = '|lcc|' + 'ccc|' * len(etbins_str) ) as tabular:
                                     tabular = tabular

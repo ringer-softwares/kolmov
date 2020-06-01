@@ -34,6 +34,8 @@ class kplot( Logger ):
         Ex.: /my_volume/my_history_files
 
         - model_idx: the index of model that you want extract the monitoring info.
+        - str_et_bins: a list which contains the et boundaries. 
+        The default values are the zee et binning, other are in constants.
         '''
 
         Logger.__init__( self )
