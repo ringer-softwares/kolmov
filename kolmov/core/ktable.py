@@ -268,7 +268,7 @@ class ktable( Logger ):
     @classmethod
     def dump_all_history( cls, table, output_path , tag):
         if not os.path.exists( output_path ):
-          os.mkdir( output_path )
+          os.makedirs( output_path )
         for _ , row in table.iterrows():
             if row.train_tag != tag:
               continue
@@ -314,7 +314,7 @@ class ktable( Logger ):
     # Dump beamer table
     #
     def dump_beamer_table( self, pandas_best_inits,
-                           etbins, etabins, operation_points,
+                           etbins, etabins, operation_points, doPDF=True,
                            output_file_name='beamer_pdf', tags=None ):
        
         cv_table = self.describe( pandas_best_inits )
@@ -378,7 +378,7 @@ class ktable( Logger ):
 
         # Apply beamer
         with BeamerTexReportTemplate1( theme = 'Berlin'
-                                 , _toPDF = True
+                                 , _toPDF = doPDF
                                  , title = 'Cross Validation Table'
                                  , outputFile = output_file_name
                                  , font = 'structurebold' ):

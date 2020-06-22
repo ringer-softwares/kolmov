@@ -92,7 +92,9 @@ class kplot( Logger ):
                                          plot_path=my_save_path, 
                                          plot_name=a_very_meaningful_name)
         '''
-
+        if not os.path.exists( plot_path ):
+          os.makedirs( plot_path )
+        
         # a easy way to lock only in the necessaries keys
         wanted_h_keys = ['et%i_eta%i_sort_%i' %(et_bin, eta_bin, i) for i in range(10)]
         
@@ -115,11 +117,15 @@ class kplot( Logger ):
                     ax[idx, jdx].set_xlabel('Epochs')
                     ax[idx, jdx].plot(self.h_dict[isort][train_ind[0]], c='r', label='Train Step')
                     ax[idx, jdx].plot(self.h_dict[isort][train_ind[1]], c='b', label='Validation Step')
+                    ax[idx, jdx].axvline(x=self.h_dict[isort]['max_sp_best_epoch_val'][-1], label='Best Epoch',
+                                         c='black', lw=1.25, ls='--')
                     ax[idx, jdx].legend()
                     ax[idx, jdx].grid()
                 else:
                     ax[idx, jdx].set_title('%s - %s' %(self.plot_names[train_ind],
                                                        self.sort_name_dict[isort_k]))
+                    ax[idx, jdx].axvline(x=self.h_dict[isort]['max_sp_best_epoch_val'][-1], label='Best Epoch',
+                                         c='black', lw=1.25, ls='--')
                     ax[idx, jdx].set_xlabel('Epochs')
                     ax[idx, jdx].plot(self.h_dict[isort][train_ind], c='g', label='Validation Step')
                     ax[idx, jdx].grid()
@@ -130,6 +136,8 @@ class kplot( Logger ):
         fig.savefig(os.path.join(plot_path, '%s.png' %(plot_name)),
                     dpi=300,
                     bbox_inches='tight')
+        plt.close();
+        return
 
 
 def kquadrant_pocket(df, plot_configs, output_path='/volume'):
