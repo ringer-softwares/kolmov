@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
   name = 'kolmov',
-  version = '1.0.5',
+  version = '1.0.6',
   license='GPL-3.0',
   description = 'A Framework to perfomance the cross validation for Ringer tunings',
   long_description = long_description,
@@ -38,6 +38,5 @@ setup(
     'Programming Language :: Python :: 3',
     'Programming Language :: Python :: 3.6',
     'Programming Language :: Python :: 3.7',
-    'Programming Language :: Python :: 3.8',
   ],
 )
