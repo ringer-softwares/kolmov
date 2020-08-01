@@ -30,7 +30,6 @@ aux_threshold_dict_keys = {
     'VeryLoose' : 'vloose_op_threshold',
 }
 
-# this export has the threshold info, so don't need to preed    
 class export_tool(object):
     '''
     This class is the default kolmov export tool to get and prepare the tunings
@@ -163,6 +162,215 @@ class export_tool(object):
             self.save_dicts(operation_point)
         print('Done!')
 
+########################
+#TOGUIDE
+# def convert_to_onnx_with_dummy_thresholds( models, name, version, signature, model_output_format , operation, output):
+
+#     import onnx
+#     import keras2onnx
+#     from ROOT import TEnv
+#     model_etmin_vec = []
+#     model_etmax_vec = []
+#     model_etamin_vec = []
+#     model_etamax_vec = []
+#     model_paths = []
+
+#     slopes = []
+#     offsets = []
+
+#     for model in models:
+
+#         model_etmin_vec.append( model['etBin'][0] )
+#         model_etmax_vec.append( model['etBin'][1] )
+#         model_etamin_vec.append( model['etaBin'][0] )
+#         model_etamax_vec.append( model['etaBin'][1] )
+
+#         etBinIdx = model['etBinIdx']
+#         etaBinIdx = model['etaBinIdx']
+
+#         # Conver keras to Onnx
+#         onnx_model = keras2onnx.convert_keras(model['model'], model['model'].name)
+
+#         onnx_model_name = model_output_format%( etBinIdx, etaBinIdx )
+#         model_paths.append( onnx_model_name )
+
+#         # Save onnx mode!
+#         onnx.save_model(onnx_model, onnx_model_name)
+
+#         slopes.append( 0.0 )
+#         offsets.append( 0.0 )
+
+
+#     def list_to_str( l ):
+#         s = str()
+#         for ll in l:
+#           s+=str(ll)+'; '
+#         return s[:-2]
+
+#     # Write the config file
+#     file = TEnv( 'ringer' )
+#     file.SetValue( "__name__", name )
+#     file.SetValue( "__version__", version )
+#     file.SetValue( "__operation__", operation )
+#     file.SetValue( "__signature__", signature )
+#     file.SetValue( "Model__size"  , str(len(models)) )
+#     file.SetValue( "Model__etmin" , list_to_str(model_etmin_vec) )
+#     file.SetValue( "Model__etmax" , list_to_str(model_etmax_vec) )
+#     file.SetValue( "Model__etamin", list_to_str(model_etamin_vec) )
+#     file.SetValue( "Model__etamax", list_to_str(model_etamax_vec) )
+#     file.SetValue( "Model__path"  , list_to_str( model_paths ) )
+#     file.SetValue( "Threshold__size"  , str(len(models)) )
+#     file.SetValue( "Threshold__etmin" , list_to_str(model_etmin_vec) )
+#     file.SetValue( "Threshold__etmax" , list_to_str(model_etmax_vec) )
+#     file.SetValue( "Threshold__etamin", list_to_str(model_etamin_vec) )
+#     file.SetValue( "Threshold__etamax", list_to_str(model_etamax_vec) )
+#     file.SetValue( "Threshold__slope" , list_to_str(slopes) )
+#     file.SetValue( "Threshold__offset", list_to_str(offsets) )
+#     file.SetValue( "Threshold__MaxAverageMu", 100)
+#     file.WriteFile(output)
+
+# for op in ['Tight','Medium','Loose','VeryLoose']:
+
+#     format = 'data17_13TeV_EGAM1_probes_lhmedium_EGAM7_vetolhvloose.model_v10.electron'+op+'.et%d_eta%d.onnx'
+#     output = "ElectronRinger%sTriggerConfig.conf"%op
+#     convert_to_onnx_with_dummy_thresholds( models, 'TrigL2_20200715_v10', 'v10', 'electron', format ,op ,output)
+
+################
+
+# this tool export tunings to use in onnx
+class export_onnx_tool(object):
+    '''
+    This class is the kolmov onnx export tool to get and prepare the tunings
+    to move them for prometheus framework. 
+    '''
+
+    def __init__(self, operation_dataframe):
+        '''
+        Arguments:
+        - operation_dataframe: a .csv file with all models selected to operation.
+        '''
+        self.op_df            = pd.read_csv(operation_dataframe)
+    
+
+    def get_models_dict(self):
+        return self.model_dict
+
+    def get_threshold_dict(self):
+        return self.threshold_dict
+
+    def model_finder(self, tunedfile, model_idx, sort, init):
+        '''
+        This function will search in the tunedfile for wanted
+        model given the model idx, sort and init returning the sequential and the weights.
+
+        Arguments:
+        
+        - tunedfile: the file with tuned models 
+        Ex.: 'tunedDiscr.jobID_0004.pic.gz'
+
+        - model_idx: the model index, this is more convinient when you have many MLP's models.
+        - sort: the sort that you want.
+        - init: the initialization that you want.
+        '''
+        for itunedData in tunedfile['tunedData']:
+            if ((itunedData['imodel'] == model_idx)\
+                and (itunedData['sort'] == sort)\
+                and (itunedData['init'] == init)):
+                # return the keras sequential and weights
+                return itunedData['sequence'], itunedData['weights']
+    
+    def save_dicts(self, operation_point):
+        '''
+        This function will save a dictionary into a json file.
+
+        Arguments:
+        -dictionary: is the python dict that you want to save;
+        -filename: the name of dictionary to be save.
+        '''
+        thr_filename = 'TrigL2CaloRingerElectron%sThresholds.json' %operation_point
+        m_filename   = 'TrigL2CaloRingerElectron%sConstants.json' %operation_point
+        with open(thr_filename, 'w') as fp:
+            json.dump(self.threshold_dict, fp)
+        with open(m_filename, 'w') as fp:
+            json.dump(self.model_dict, fp)
+
+
+    def fill_models_thr_dict(self, operation_point, tuning_tag,
+                             tuning_name, isJpsiee=True, save_json=True):
+        '''
+        This function will fill the dictionary of operation models using the information
+        from the operation dataframe and using the ringer data to calculate the threshold.
+        '''
+
+        # models dictionary
+        self.model_dict = {}
+        self.model_dict['models']          = [] # this must be a list
+        self.model_dict['__version__']     = tuning_tag
+        self.model_dict['__type__']        = 'Model'
+        self.model_dict['__name__']        = tuning_name
+        self.model_dict['__description__'] = ''
+        # threshold dictionary
+        self.threshold_dict = {}
+        self.threshold_dict['thresholds']      = [] # same as model
+        self.threshold_dict['__version__']     = tuning_tag
+        self.threshold_dict['__type__']        = 'Threshold'
+        self.threshold_dict['__name__']        = tuning_name
+        self.threshold_dict['__description__'] = ''
+
+        etabin_list = etabins
+        if isJpsiee:
+            etbin_list = etbins_jpsiee
+        else:
+            etbin_list = etbins_zee
+        
+        # set the operation label
+        self.model_dict['__operation__'] = operation_point
+        self.threshold_dict['__operation__'] = operation_point
+        thr_dataframe_key = aux_threshold_dict_keys[operation_point]        
+
+        for iet, ieta in product(range(self.op_df.et_bin.nunique()),
+                                 range(self.op_df.eta_bin.nunique())):
+            print('Processing et bin: %i | eta bin: %i' %(iet, ieta))
+            
+            # we need a local dictionary
+            m_local_dict = {}
+            thr_local_dict = {}
+            # 1 step: get the right file, model_id, sort and init to open.
+            aux_df = self.op_df.loc[((self.op_df['et_bin'] == iet) &\
+                                     (self.op_df['eta_bin'] == ieta)), :].copy()
+            f_name, id_model, sort, init, thr = aux_df.iloc[0][['file_name', \
+                                                                'model_idx', \
+                                                                'sort', \
+                                                                'init', \
+                                                                thr_dataframe_key]].values
+            # model info: sequential, weights and binning information
+            # add the threshold to thr_local dictionary
+            m, w = self.model_finder(tunedfile=gload(f_name),
+                                     model_idx=id_model,
+                                     sort=sort,
+                                     init=init)
+            m_local_dict['sequential'] = m
+            m_local_dict['weights']    = [wi.tolist() for wi in w] #np.arrays are not serialized
+            m_local_dict['etBin']  = etbin_list[iet]
+            m_local_dict['etaBin'] = etabin_list[ieta]
+            
+            # thr info: threshold and binning information
+            # this information must to be a list with 3 itens [alpha, beta, raw_threshold]
+            # since wee do not have pile up correction in saphyra the configuration must to be
+            # [0., raw_threshold, raw_threshold]
+            thr_local_dict['threshold'] = [0., thr, thr]
+            thr_local_dict['etBin']  = etbin_list[iet]
+            thr_local_dict['etaBin'] = etabin_list[ieta]
+
+            # append the local dict to dict
+            self.model_dict['models'].append(m_local_dict)
+            self.threshold_dict['thresholds'].append(thr_local_dict)
+        if save_json:
+            print('Saving json files...')
+            self.save_dicts(operation_point)
+        print('Done!')
+
+# this tool will calculate the threshold in case that this info aren't avaliable
 class first_export_tool(object):
     '''
     This class is the very first export tool to get and prepare the tunings

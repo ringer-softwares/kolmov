@@ -172,7 +172,7 @@ def kquadrant_pocket(df, plot_configs, output_path='/volume'):
                                                                 local_config['title_tag2']),
                     fontsize=20)
 
-        ns, bins, patches =  ax1.hist([var_cond1, var_cond2], normed=False,
+        ns, bins, patches =  ax1.hist([var_cond1, var_cond2],
                                     bins=local_config['nbins'],
                                     color=['blue', 'red'],
                                     histtype='step', 
@@ -190,7 +190,7 @@ def kquadrant_pocket(df, plot_configs, output_path='/volume'):
 
 
         ax1.set_ylabel('Counts', fontsize=15)
-        ax2.set_ylabel('Ratio', fontsize=15)
+        ax2.set_ylabel('Ratio (%)', fontsize=15)
         ax1.set_yscale('log')
         ax2.set_yscale('log')
         ax2.set_xlabel(r'%s' %(local_config['var_name']), fontsize=15)
