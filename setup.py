@@ -19,8 +19,8 @@ setup(
   keywords = ['framework', 'validation', 'machine-learning', 'ai', 'plotting', 'data-visualization'],
   install_requires = [
     'keras',
-    'tensorflow',
-    'numpy>=1.18.1',
+    'tensorflow==2.3.0',
+    'numpy<1.19.0,>=1.16.0',
     'six>=1.12.0',
     'scipy==1.4.1',
     'future',
