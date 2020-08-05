@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
   name = 'kolmov',
-  version = '1.0.8',
+  version = '1.0.10',
   license='GPL-3.0',
   description = 'A Framework to perfomance the cross validation for Ringer tunings',
   long_description = long_description,
@@ -18,7 +18,6 @@ setup(
   url = 'https://github.com/micaelverissimo/kolmov',
   keywords = ['framework', 'validation', 'machine-learning', 'ai', 'plotting', 'data-visualization'],
   install_requires = [
-    'keras',
     'tensorflow==2.3.0',
     'numpy<1.19.0,>=1.16.0',
     'six>=1.12.0',
@@ -28,7 +27,9 @@ setup(
     'scikit-learn>=0.22.1',
     'Gaugi>=1.0.0',
     'matplotlib>=3.1.3',
-    'seaborn>=0.10.0'
+    'seaborn>=0.10.0',
+    'onnxruntime',
+    'keras2onnx'
   ],
   classifiers=[
     'Development Status :: 4 - Beta',
