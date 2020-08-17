@@ -2,7 +2,8 @@ __all__ = [
     'calc_sp',
     'first_export_tool',
     'export_tool',
-    'export_onnx_tool'
+    'export_onnx_tool',
+    'export_fastnet_to_onnx'
 ]
 
 import os
@@ -21,7 +22,13 @@ from kolmov.core.constants import etbins_zee, etbins_jpsiee, etabins
 
 import onnx
 import keras2onnx
-from ROOT import TEnv
+from ROOT import TEnv, TFile
+
+# to get the legacy correctly
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Activation
+
 
 # SP index definition
 def calc_sp(pd, fa):
@@ -141,6 +148,7 @@ class export_tool(object):
                                                                 'sort', \
                                                                 'init', \
                                                                 thr_dataframe_key]].values
+            
             # model info: sequential, weights and binning information
             # add the threshold to thr_local dictionary
             m, w = self.model_finder(tunedfile=gload(f_name),
@@ -169,6 +177,180 @@ class export_tool(object):
         print('Done!')
 
 # to export in onnx format
+
+class export_fastnet_to_onnx(object):
+    '''
+    This class was created to export tunings that were made in TuningTools (FastNet) in order to move them to prometheus framework.
+    '''
+
+    def __init__(self, path_to_tuning):
+        '''
+        Arguments:
+        path_to_tunings: the path that contains the .root files
+        '''
+        self.thr_filename    = os.path.join(path_to_tuning, 'TrigL2CaloRingerElectron%sThresholds.root')
+        self.models_filename = os.path.join(path_to_tuning, 'TrigL2CaloRingerElectron%sConstants.root')
+
+    # auxiliar function to create the export files
+    def list_to_str(self, l ):
+        s = str()
+        for ll in l:
+            s+=str(ll)+'; '
+        return s[:-2]
+
+    def translate_bins(self, et, eta, isJpsiee=True):
+        '''
+        This function will translate the bins from root file.
+        Arguments:
+        et: et value from root file
+        eta: eta value from root file
+        isJpsiee: boolean to specific the et bins.
+        '''
+        if isJpsiee:
+            if et[0] == 0:
+                etBin = 0
+            elif et[0] == 7:
+                etBin = 1
+            elif et[0] == 10:
+                etBin = 2
+        else:
+            if et[0] == 0 or et[0] == 15:
+                etBin = 0
+            elif et[0] == 20:
+                etBin = 1
+            elif et[0] == 30:
+                etBin = 2
+            elif et[0] == 40:
+                etBin = 3
+            elif et[0] == 50:
+                etBin = 4
+        # get eta
+        if eta[0] == 0:
+            etaBin = 0
+        elif eta[0] == 0.8:
+            etaBin = 1
+        elif eta[0] == 1.37:
+            etaBin = 2
+        elif eta[0] == 1.54:
+            etaBin = 3
+        elif eta[0] == 2.37:
+            etaBin = 4
+        return etBin, etaBin
+
+    def convert_to_keras_model(self, neuron, W, B, input_shape=100 ):
+        '''
+        This function will create a keras model which will be filled with FastNet model information.
+        This function works only and only for MLP models with one hidden layer.
+        Arguments:
+        neuron: #neurons in hidden layer.
+        W: FastNet weights.
+        B: FastNet bias.
+        input_shape: shape of input layer
+        '''
+        # Build the standard model
+        model  = Sequential()
+        model.add( Dense( neuron , input_shape= (input_shape,), activation = 'tanh') )
+        model.add( Dense( 1, activation='linear' ) )
+        w0 = np.zeros((neuron, input_shape))
+        b0 = []
+        for i in range(neuron):
+            for j in range(input_shape):
+                w0[i][j] = W.pop(0)
+            b0.append(B.pop(0))
+        w1 = W
+        b1 = B
+        ww = np.array([ np.array(w0).T, np.array(b0), np.array(w1), np.array(b1) ] ) 
+        ww[2]=ww[2].reshape((ww[2].shape[0],1))
+        model.set_weights(ww)
+        return model
+
+    def create_config_files(self, operation_point, tuning_name, version, 
+                            model_format_name, output_config_name, 
+                            signature='electron', isJpsiee=True):
+        '''
+        This function will fill the dictionary of operation models using the information
+        from the operation dataframe and using the ringer data to calculate the threshold.
+        '''
+
+        etabin_list = etabins
+        if isJpsiee:
+            etbin_list = etbins_jpsiee
+        else:
+            etbin_list = etbins_zee
+        
+        # format the file names, open then and get the tree
+        thrs_file      = TFile(self.thr_filename %(operation_point))
+        thresholdsTree = thrs_file.tuning.Get('thresholds')
+
+        models_file    = TFile(self.models_filename %(operation_point))
+        modelsTree     = models_file.tuning.Get('discriminators')
+
+        # tuning information
+        model_etmin_vec = []
+        model_etmax_vec = []
+        model_etamin_vec = []
+        model_etamax_vec = []
+        model_paths = []
+
+        # slopes and offsets (threshold configuration)
+        slopes  = []
+        offsets = []
+        # loop over models and thresholds in TTree
+        for ithr, imodel in zip(thresholdsTree, modelsTree):
+            # get the bins
+            iet, ieta = self.translate_bins(ithr.etBin, ithr.etaBin)
+            print('Processing et bin: %i | eta bin: %i' %(iet, ieta))
+
+            # fill et and eta vec
+            model_etmin_vec.append(etbin_list[iet][0])
+            model_etmax_vec.append(etbin_list[iet][1])
+            model_etamin_vec.append(etabin_list[ieta][0])
+            model_etamax_vec.append(etabin_list[ieta][1])
+
+            # easy way to get the thresholds
+            l_thr   = list(ithr.thresholds)
+            slopes.append(l_thr[0])
+            offsets.append(l_thr[1])
+
+            # get the models
+            weights = list(imodel.weights)
+            bias = list(imodel.bias)
+            l_model = self.convert_to_keras_model(len(weights)%100, weights, bias)
+            print(l_model.summary())
+            # convert keras to Onnx
+            onnx_model = keras2onnx.convert_keras(l_model, l_model.name)
+            # onnx model name and add to the model paths
+            s_l = model_format_name %(operation_point, iet, ieta)
+            # now add the model string to model_paths
+            onnx_model_name = s_l
+            model_paths.append( s_l.split('/')[-1] )
+            # save the onnx model
+            onnx.save_model(onnx_model, onnx_model_name)
+        # done! Fill all list with the models
+        # write the config file
+        m_file = TEnv('ringer')
+        m_file.SetValue("__name__", tuning_name)
+        m_file.SetValue("__version__", version)
+        m_file.SetValue("__operation__", operation_point)
+        m_file.SetValue("__signature__", signature)
+        m_file.SetValue("Model__size", str(len(model_paths)))
+        m_file.SetValue("Model__etmin", self.list_to_str(model_etmin_vec))
+        m_file.SetValue("Model__etmax", self.list_to_str(model_etmax_vec))
+        m_file.SetValue("Model__etamin", self.list_to_str(model_etamin_vec))
+        m_file.SetValue("Model__etamax", self.list_to_str(model_etamax_vec))
+        m_file.SetValue("Model__path", self.list_to_str(model_paths))
+        m_file.SetValue( "Threshold__size"  , str(len(model_paths)) )
+        m_file.SetValue( "Threshold__etmin" , self.list_to_str(model_etmin_vec) )
+        m_file.SetValue( "Threshold__etmax" , self.list_to_str(model_etmax_vec) )
+        m_file.SetValue( "Threshold__etamin", self.list_to_str(model_etamin_vec) )
+        m_file.SetValue( "Threshold__etamax", self.list_to_str(model_etamax_vec) )
+        m_file.SetValue( "Threshold__slope" , self.list_to_str(slopes) )
+        m_file.SetValue( "Threshold__offset", self.list_to_str(offsets) )
+        m_file.SetValue( "Threshold__MaxAverageMu", 100.)
+        m_file.WriteFile(output_config_name%(operation_point))
+
+
+
 class export_onnx_tool(object):
     '''
     This class is the default kolmov export tool to get and prepare the tunings
@@ -224,23 +406,23 @@ class export_onnx_tool(object):
             etbin_list = etbins_jpsiee
         else:
             etbin_list = etbins_zee
-        
+
         thr_dataframe_key = aux_threshold_dict_keys[operation_point]
+        # loop over et and eta
+        # tuning information
+        model_etmin_vec = []
+        model_etmax_vec = []
+        model_etamin_vec = []
+        model_etamax_vec = []
+        model_paths = []
+        # slopes and offsets (threshold configuration)
+        slopes  = []
+        offsets = []
         # loop over et and eta
         for iet, ieta in product(range(self.op_df.et_bin.nunique()),
                                  range(self.op_df.eta_bin.nunique())):
             print('Processing et bin: %i | eta bin: %i' %(iet, ieta))
             
-            # tuning information
-            model_etmin_vec = []
-            model_etmax_vec = []
-            model_etamin_vec = []
-            model_etamax_vec = []
-            model_paths = []
-
-            # slopes and offsets (threshold configuration)
-            slopes  = []
-            offsets = []
 
             # 1 step: get the right file, model_id, sort and init to open.
             aux_df = self.op_df.loc[((self.op_df['et_bin'] == iet) &\
@@ -259,10 +441,10 @@ class export_onnx_tool(object):
                                      init=init)
             
             # fill et and eta vec
-            model_etmin_vec.append(etbin_list[0])
-            model_etmax_vec.append(etbin_list[1])
-            model_etamin_vec.append(etabin_list[0])
-            model_etamax_vec.append(etabin_list[1])
+            model_etmin_vec.append(etbin_list[iet][0])
+            model_etmax_vec.append(etbin_list[iet][1])
+            model_etamin_vec.append(etabin_list[ieta][0])
+            model_etamax_vec.append(etabin_list[ieta][1])
 
             # set the weights to the model
             l_model = model_from_json(json.dumps(m))
@@ -273,8 +455,10 @@ class export_onnx_tool(object):
             # convert keras to Onnx
             onnx_model = keras2onnx.convert_keras(l_model, l_model.name)
             # onnx model name and add to the model paths
-            onnx_model_name = model_format_name %(operation_point, iet, ieta)
-            model_paths.append( onnx_model_name )
+            s_l = model_format_name %(operation_point, iet, ieta)
+            
+            onnx_model_name = s_l
+            model_paths.append( s_l.split('/')[-1] )
             # save the onnx model
             onnx.save_model(onnx_model, onnx_model_name)
 
@@ -301,7 +485,7 @@ class export_onnx_tool(object):
         m_file.SetValue( "Threshold__etamax", self.list_to_str(model_etamax_vec) )
         m_file.SetValue( "Threshold__slope" , self.list_to_str(slopes) )
         m_file.SetValue( "Threshold__offset", self.list_to_str(offsets) )
-        m_file.SetValue( "Threshold__MaxAverageMu", 100)
+        m_file.SetValue( "Threshold__MaxAverageMu", 100.)
         m_file.WriteFile(output_config_name%(operation_point))
 
 ########################
