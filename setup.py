@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
   name = 'kolmov',
-  version = '1.0.11',
+  version = '1.0.12',
   license='GPL-3.0',
   description = 'A Framework to perfomance the cross validation for Ringer tunings',
   long_description = long_description,
@@ -19,7 +19,7 @@ setup(
   keywords = ['framework', 'validation', 'machine-learning', 'ai', 'plotting', 'data-visualization'],
   install_requires = [
     'tensorflow==2.3.0',
-    'numpy<1.19.0,>=1.16.0',
+    'numpy<1.19.0,>=1.16.6',
     'six>=1.12.0',
     'scipy==1.4.1',
     'future',
