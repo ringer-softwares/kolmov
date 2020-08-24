@@ -11,7 +11,8 @@ import collections, os, glob, json, copy, re
 import numpy as np
 import pandas as pd
 
-
+def calc_sp(pd, fa):
+    return np.sqrt(np.sqrt(pd*(1-fa))*(0.5*(pd+(1-fa))))
 
 class ktable( Logger ):
 
@@ -194,7 +195,7 @@ class ktable( Logger ):
 
         In this example my_df is a pandas DataFrame with the best intilization sorted by 'max_sp_val'.
         '''
-        return self.pandas_table.loc[self.pandas_table.groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax(), :]
+        return self.pandas_table.loc[self.pandas_table.groupby(['train_tag', 'et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax(), :]
    
 
 
@@ -202,7 +203,7 @@ class ktable( Logger ):
     # Get the best sorts from best inits table
     #
     def filter_sorts(self, pandas_best_inits, key):
-        return pandas_best_inits.loc[pandas_best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax(), :]
+        return pandas_best_inits.loc[pandas_best_inits.groupby(['train_tag', 'et_bin', 'eta_bin', 'model_idx'])[key].idxmax(), :]
  
 
 
@@ -210,7 +211,11 @@ class ktable( Logger ):
     # Calculate the mean/std table from best inits table
     #
     def describe(self, pandas_best_inits ):
-    
+        '''
+        This method will give the mean and std for construct the beamer presentation for each train tag.
+        Arguments:
+        pandas_best_inits: a pandas Dataframe which contains all information for the best inits.
+        '''
         # Create a new dataframe to hold this table
         dataframe = { 'train_tag' : [], 'et_bin' : [], 'eta_bin' : []}
         # Include all wanted keys into the dataframe
@@ -247,7 +252,12 @@ class ktable( Logger ):
     # Get tge cross val integrated table from best inits
     #
     def integrate( self, pandas_best_inits, tag ):
-
+        '''
+        This method is used to get the integrate information of a given tag.
+        Arguments:
+        pandas_best_inits: a pandas Dataframe which contains all information for the best inits.
+        tag: the training tag that will be integrate.
+        '''
         keys = [ key for key in self.__config_dict.keys() if 'passed' in key or 'total' in key]
         table = pandas_best_inits.loc[pandas_best_inits.train_tag==tag].groupby(['sort']).agg(dict(zip( keys, ['sum']*len(keys))))
         for key in keys:
@@ -267,6 +277,13 @@ class ktable( Logger ):
     #
     @classmethod
     def dump_all_history( cls, table, output_path , tag):
+        '''
+        This method will dump the train history. This is a way to get more easy this information when plotting the train evolution.
+        Arguments:
+        table: a table with the path information.
+        output_path: the path to sabe the hitories.
+        tag: the train tag.
+        '''
         if not os.path.exists( output_path ):
           os.makedirs( output_path )
         for _ , row in table.iterrows():
@@ -290,7 +307,7 @@ class ktable( Logger ):
         '''
         A method to save the pandas DataFrame created by table_info into a .csv file.
         Arguments:
-        - cv_table: the table created (and filtered) by table_info;
+        - table: the table created (and filtered) by table_info;
         - output_path: the file destination;
         - table_name: the file name;
 
@@ -316,7 +333,16 @@ class ktable( Logger ):
     def dump_beamer_table( self, pandas_best_inits,
                            etbins, etabins, operation_points, doPDF=True,
                            output_file_name='beamer_pdf', tags=None ):
-       
+        '''
+        This method will use a pandas Dataframe in order to create a beamer presentation which summary the tuning cross-validation.
+        Arguments:
+        pandas_best_inits: a pandas Dataframe which contains all information for the best inits.
+        etbins/etabins: a list with the bins boundaries.
+        operation_points: the operation point that will be used.
+        doPDF: a flag to compile the pdf or leave it in .tex.
+        output_file_name: a name for the pdf
+        tags: the training tag that will be used. If None then the tags will be get from the Dataframe.
+        '''
         cv_table = self.describe( pandas_best_inits )
 
         # Prepare the config dict using the operation points and some default keys
@@ -425,11 +451,12 @@ class ktable( Logger ):
                 lines2 += [ TableLine( columns = ['',colorPD+r'$P_{D}[\%]$',colorPF+r'$P_{F}[\%]$'], _contextManaged = False ) ]
                 lines2 += [ HLine(_contextManaged = False) ]
                 for idx, tag in enumerate( train_tags ):
+                    # get the integrate efficiency
                     itable = self.integrate( pandas_best_inits, tag )
-                    pd = itable[operation_point+'_pd_op'].values[0]*100
-                    pd_std = itable[operation_point+'_pd_op'].values[1]*100
-                    fa = itable[operation_point+'_fa_op'].values[0]*100
-                    fa_std = itable[operation_point+'_fa_op'].values[1]*100
+                    pd = itable[operation_point+'_pd_val'].values[0]*100
+                    pd_std = itable[operation_point+'_pd_val'].values[1]*100
+                    fa = itable[operation_point+'_fa_val'].values[0]*100
+                    fa_std = itable[operation_point+'_fa_val'].values[1]*100
                     pdref = itable[operation_point+'_pd_ref'].values[0]*100
                     faref = itable[operation_point+'_fa_ref'].values[0]*100
                     if idx > 0:
