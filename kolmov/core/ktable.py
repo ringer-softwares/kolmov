@@ -453,6 +453,7 @@ class ktable( Logger ):
                 for idx, tag in enumerate( train_tags ):
                     # get the integrate efficiency
                     itable = self.integrate( pandas_best_inits, tag )
+                    # we need to use val values
                     pd = itable[operation_point+'_pd_val'].values[0]*100
                     pd_std = itable[operation_point+'_pd_val'].values[1]*100
                     fa = itable[operation_point+'_fa_val'].values[0]*100
