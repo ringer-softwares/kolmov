@@ -18,7 +18,7 @@ setup(
   url = 'https://github.com/micaelverissimo/kolmov',
   keywords = ['framework', 'validation', 'machine-learning', 'ai', 'plotting', 'data-visualization'],
   install_requires = [
-    'tensorflow==2.3.0',
+    'tensorflow==2.3.1',
     'numpy<1.19.0,>=1.16.6',
     'six>=1.12.0',
     'scipy==1.4.1',
