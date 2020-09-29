@@ -122,8 +122,12 @@ class ktable( Logger ):
                 # Get the value for each wanted key passed by the user in the contructor args.
                 for key, local  in self.__config_dict.items():
                     dataframe[key].append( self.__get_value( history, local ) )
+        if self.pandas_table is None:
+            self.pandas_table = pd.DataFrame(dataframe)
+        else:
+            MSG_INFO(self, 'Concatenate the previus Dataframe.')
+            self.pandas_table = pd.concat([self.pandas_table, pd.DataFrame(dataframe)], ignore_index=True)
         
-        self.pandas_table = self.pandas_table.append( pd.DataFrame(dataframe) ) if not self.pandas_table is None else pd.DataFrame(dataframe)
         MSG_INFO(self, 'End of fill step, a pandas DataFrame was created...')
 
 
