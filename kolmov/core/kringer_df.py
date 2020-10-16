@@ -114,8 +114,10 @@ class kringer_df(Logger):
             rings          = self.get_rings()
             rings         /= np.abs(rings.sum(axis=1))[:, None] # normalization step
             local_output   = local_model.predict(rings)
+            # add output
+            self.df_[ikey+'_output'] = local_output
             # create the descision
             local_output[ local_output >= thr ] = 1. 
             local_output[ local_output < thr ] = 0.
             # add the decision as a new column into the Dataframe
-            self.df_[ikey] = local_output
+            self.df_[ikey+'_decision'] = local_output
