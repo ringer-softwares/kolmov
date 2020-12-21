@@ -1,5 +1,4 @@
 __all__ = [
-    'calc_sp',
     'first_export_tool',
     'export_tool',
     'export_onnx_tool',
@@ -12,13 +11,13 @@ import json
 import numpy as np
 import pandas as pd
 
-from itertools import product 
+from itertools import product
 from Gaugi import load as gload
 from Gaugi import save as gsave
 from sklearn.metrics import roc_curve
 from tensorflow.keras.models import model_from_json
 
-from kolmov.core.constants import etbins_zee, etbins_jpsiee, etabins
+from kolmov.utils.constants import etbins_zee, etbins_jpsiee, etabins
 
 import onnx
 import keras2onnx
@@ -43,10 +42,12 @@ aux_threshold_dict_keys = {
     'VeryLoose' : 'vloose_op_threshold',
 }
 
+
+
 class export_tool(object):
     '''
     This class is the default kolmov export tool to get and prepare the tunings
-    to move them for prometheus framework. 
+    to move them for prometheus framework.
     '''
 
     def __init__(self, operation_dataframe):
@@ -55,7 +56,7 @@ class export_tool(object):
         - operation_dataframe: a .csv file with all models selected to operation.
         '''
         self.op_df            = pd.read_csv(operation_dataframe)
-    
+
 
     def get_models_dict(self):
         return self.model_dict
@@ -69,8 +70,8 @@ class export_tool(object):
         model given the model idx, sort and init returning the sequential and the weights.
 
         Arguments:
-        
-        - tunedfile: the file with tuned models 
+
+        - tunedfile: the file with tuned models
         Ex.: 'tunedDiscr.jobID_0004.pic.gz'
 
         - model_idx: the model index, this is more convinient when you have many MLP's models.
@@ -83,7 +84,7 @@ class export_tool(object):
                 and (itunedData['init'] == init)):
                 # return the keras sequential and weights
                 return itunedData['sequence'], itunedData['weights']
-    
+
     def save_dicts(self, operation_point):
         '''
         This function will save a dictionary into a json file.
@@ -127,16 +128,16 @@ class export_tool(object):
             etbin_list = etbins_jpsiee
         else:
             etbin_list = etbins_zee
-        
+
         # set the operation label
         self.model_dict['__operation__'] = operation_point
         self.threshold_dict['__operation__'] = operation_point
-        thr_dataframe_key = aux_threshold_dict_keys[operation_point]        
+        thr_dataframe_key = aux_threshold_dict_keys[operation_point]
 
         for iet, ieta in product(range(self.op_df.et_bin.nunique()),
                                  range(self.op_df.eta_bin.nunique())):
             print('Processing et bin: %i | eta bin: %i' %(iet, ieta))
-            
+
             # we need a local dictionary
             m_local_dict = {}
             thr_local_dict = {}
@@ -148,7 +149,7 @@ class export_tool(object):
                                                                 'sort', \
                                                                 'init', \
                                                                 thr_dataframe_key]].values
-            
+
             # model info: sequential, weights and binning information
             # add the threshold to thr_local dictionary
             m, w = self.model_finder(tunedfile=gload(f_name),
@@ -159,7 +160,7 @@ class export_tool(object):
             m_local_dict['weights']    = [wi.tolist() for wi in w] #np.arrays are not serialized
             m_local_dict['etBin']  = etbin_list[iet]
             m_local_dict['etaBin'] = etabin_list[ieta]
-            
+
             # thr info: threshold and binning information
             # this information must to be a list with 3 itens [alpha, beta, raw_threshold]
             # since wee do not have pile up correction in saphyra the configuration must to be
@@ -259,13 +260,13 @@ class export_fastnet_to_onnx(object):
             b0.append(B.pop(0))
         w1 = W
         b1 = B
-        ww = np.array([ np.array(w0).T, np.array(b0), np.array(w1), np.array(b1) ] ) 
+        ww = np.array([ np.array(w0).T, np.array(b0), np.array(w1), np.array(b1) ] )
         ww[2]=ww[2].reshape((ww[2].shape[0],1))
         model.set_weights(ww)
         return model
 
-    def create_config_files(self, operation_point, tuning_name, version, 
-                            model_format_name, output_config_name, 
+    def create_config_files(self, operation_point, tuning_name, version,
+                            model_format_name, output_config_name,
                             signature='electron', isJpsiee=True):
         '''
         This function will fill the dictionary of operation models using the information
@@ -277,7 +278,7 @@ class export_fastnet_to_onnx(object):
             etbin_list = etbins_jpsiee
         else:
             etbin_list = etbins_zee
-        
+
         # format the file names, open then and get the tree
         thrs_file      = TFile(self.thr_filename %(operation_point))
         thresholdsTree = thrs_file.tuning.Get('thresholds')
@@ -354,7 +355,7 @@ class export_fastnet_to_onnx(object):
 class export_onnx_tool(object):
     '''
     This class is the default kolmov export tool to get and prepare the tunings
-    to move them for prometheus framework in onnx format. 
+    to move them for prometheus framework in onnx format.
     '''
 
     def __init__(self, operation_dataframe):
@@ -363,7 +364,7 @@ class export_onnx_tool(object):
         - operation_dataframe: a .csv file with all models selected to operation.
         '''
         self.op_df            = pd.read_csv(operation_dataframe)
-    
+
 
     def model_finder(self, tunedfile, model_idx, sort, init):
         '''
@@ -371,8 +372,8 @@ class export_onnx_tool(object):
         model given the model idx, sort and init returning the sequential and the weights.
 
         Arguments:
-        
-        - tunedfile: the file with tuned models 
+
+        - tunedfile: the file with tuned models
         Ex.: 'tunedDiscr.jobID_0004.pic.gz'
 
         - model_idx: the model index, this is more convinient when you have many MLP's models.
@@ -393,8 +394,8 @@ class export_onnx_tool(object):
             s+=str(ll)+'; '
         return s[:-2]
 
-    def create_config_files(self, operation_point, tuning_name, version, 
-                            model_format_name, output_config_name, 
+    def create_config_files(self, operation_point, tuning_name, version,
+                            model_format_name, output_config_name,
                             signature='electron', isJpsiee=True):
         '''
         This function will fill the dictionary of operation models using the information
@@ -422,7 +423,7 @@ class export_onnx_tool(object):
         for iet, ieta in product(range(self.op_df.et_bin.nunique()),
                                  range(self.op_df.eta_bin.nunique())):
             print('Processing et bin: %i | eta bin: %i' %(iet, ieta))
-            
+
 
             # 1 step: get the right file, model_id, sort and init to open.
             aux_df = self.op_df.loc[((self.op_df['et_bin'] == iet) &\
@@ -432,14 +433,14 @@ class export_onnx_tool(object):
                                                                 'sort', \
                                                                 'init', \
                                                                 thr_dataframe_key]].values
-            
+
             # model info: sequential, weights and binning information
             # add the threshold to thr_local dictionary
             m, w = self.model_finder(tunedfile=gload(f_name),
                                      model_idx=id_model,
                                      sort=sort,
                                      init=init)
-            
+
             # fill et and eta vec
             model_etmin_vec.append(etbin_list[iet][0])
             model_etmax_vec.append(etbin_list[iet][1])
@@ -456,7 +457,7 @@ class export_onnx_tool(object):
             onnx_model = keras2onnx.convert_keras(l_model, l_model.name)
             # onnx model name and add to the model paths
             s_l = model_format_name %(operation_point, iet, ieta)
-            
+
             onnx_model_name = s_l
             model_paths.append( s_l.split('/')[-1] )
             # save the onnx model
@@ -566,9 +567,9 @@ class export_onnx_tool(object):
 class first_export_tool(object):
     '''
     This class is the very first export tool to get and prepare the tunings
-    to move them for prometheus framework. 
+    to move them for prometheus framework.
 
-    As in older version of saphyra tunings the thresholds wasn't saved so this class 
+    As in older version of saphyra tunings the thresholds wasn't saved so this class
     will compute the operation threshold using the data used to train.
 
     This probably will be changed when saphyra dump the thresholds too.
@@ -590,15 +591,15 @@ class first_export_tool(object):
         self.op_df            = pd.read_csv(operation_dataframe)
         self.ringer_data_path = ringer_data_path
         self.noHAD            = noHAD
-    
+
     def model_finder(self, tunedfile, model_idx, sort, init):
         '''
         This function will search in the tunedfile for wanted
         model given the model idx, sort and init returning the sequential and the weights.
 
         Arguments:
-        
-        - tunedfile: the file with tuned models 
+
+        - tunedfile: the file with tuned models
         Ex.: 'tunedDiscr.jobID_0004.pic.gz'
 
         - model_idx: the model index, this is more convinient when you have many MLP's models.
@@ -611,7 +612,7 @@ class first_export_tool(object):
                 and (itunedData['init'] == init)):
                 # return the keras sequential and weights
                 return itunedData['sequence'], itunedData['weights']
-    
+
     def save_models_dict(self, filename):
         '''
         This function will save the models dictionary obtained in fill_models_dict function.
@@ -664,7 +665,7 @@ class first_export_tool(object):
                 rings            = data['data'][:, 1:101]
             print('Preprocessing rings...')
             norm             = np.abs(rings.sum(axis=1))
-            norm[ norm == 0] = 1 
+            norm[ norm == 0] = 1
             rings            = rings/norm[:, None] # normalized rings
             trgt             = data['target']
             # predict on rings
@@ -682,4 +683,4 @@ class first_export_tool(object):
         print('Done!')
 
 
-    
+

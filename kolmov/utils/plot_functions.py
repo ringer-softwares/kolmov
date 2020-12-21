@@ -1,7 +1,8 @@
 
 __all__ = [
-    'kplot',
-    'kquadrant_pocket'
+    'get_color_fader',
+    'training_curves', # should be training_curves for future?
+    'plot_quadrant' , # should be plot_quadrant for future?
 ]
 
 import os
@@ -14,27 +15,38 @@ import matplotlib.pyplot as plt
 from Gaugi import Logger, expandFolders
 from Gaugi.messenger.macros import *
 
-from kolmov.core.constants import str_etbins_zee, str_etabins
+from kolmov.utils.constants import str_etbins_zee, str_etabins
 
-class kplot( Logger ):
 
-    
-    def __init__(self, path, model_idx , str_et_bins = str_etbins_zee, 
+def get_color_fader( c1, c2, n ):
+    def color_fader(c1,c2,mix=0): #fade (linear interpolate) from color c1 (at mix=0) to c2 (mix=1)
+        c1=np.array(mpl.colors.to_rgb(c1))
+        c2=np.array(mpl.colors.to_rgb(c2))
+        return mpl.colors.to_hex((1-mix)*c1 + mix*c2)
+    return [ color_fader(c1,c2, frac) for frac in np.linspace(0,1,n) ]
+
+
+
+
+class training_curves( Logger ):
+
+
+    def __init__(self, path, model_idx , str_et_bins = str_etbins_zee,
                                          str_eta_bins = str_etabins
                                          ):
-        
+
         '''
         This class is a little monitoring tool for saphyra trained models.
         Its use the dumped json history of a trained model. If you don't have this json
         use the dump_all_traiplot_monitoringn_history from base_table in kolmov.
-        
+
         Arguments:
         - path_to_history: the path to json history files
 
         Ex.: /my_volume/my_history_files
 
         - model_idx: the index of model that you want extract the monitoring info.
-        - str_et_bins: a list which contains the et boundaries. 
+        - str_et_bins: a list which contains the et boundaries.
         The default values are the zee et binning, other are in constants.
         '''
 
@@ -54,9 +66,9 @@ class kplot( Logger ):
 
 
     def load(self, basepath, model_idx):
-        
+
         '''
-        This method will open all the histories that was grouped in the initialize method, 
+        This method will open all the histories that was grouped in the initialize method,
         and put then into a dictionary in order to make easier to manipulate. Usually used
         for histories dumped from best inists table
         '''
@@ -83,22 +95,22 @@ class kplot( Logger ):
         - plot_path: the path to save the plot.
         - plot_name: the plot name.
 
-        Ex.: 
+        Ex.:
         # initialize the base_ploter class
         plot_tool = plot_monitoring('my_path/awesome_history', model_idx=0)
         # now plot some bin
         plot_tool.plot_monitoring_curves(et_bin=0,
                                          eta_bin=0,
-                                         plot_path=my_save_path, 
+                                         plot_path=my_save_path,
                                          plot_name=a_very_meaningful_name)
         '''
         if not os.path.exists( plot_path ):
           os.makedirs( plot_path )
-        
+
         # a easy way to lock only in the necessaries keys
         wanted_h_keys = ['et%i_eta%i_sort_%i' %(et_bin, eta_bin, i) for i in range(10)]
-        
-        
+
+
         # train indicators (today we use only this)
         train_indicators = [('loss', 'val_loss'), 'max_sp_val', 'max_sp_pd_val', 'max_sp_fa_val']
         # create a subplots and fill then.
@@ -140,7 +152,12 @@ class kplot( Logger ):
         return
 
 
-def kquadrant_pocket(df, plot_configs, output_path='/volume'):
+
+
+#
+# plot quadrant histograms
+#
+def plot_quadrant(df, plot_configs, output_path='/volume'):
     '''
     This function will provide a simple implementation of prometheus quadrant analysis
     applying conditions on Dataframe.
@@ -161,7 +178,7 @@ def kquadrant_pocket(df, plot_configs, output_path='/volume'):
                                (var_cond1 <= local_config['high_edge']))]
 
         var_cond2 = df[((local_config['cond2']) &\
-                        (local_config['common_cond']))][ivar].values 
+                        (local_config['common_cond']))][ivar].values
         var_cond2 = var_cond2[((var_cond2 >= local_config['low_edge']) &\
                                (var_cond2 <= local_config['high_edge']))]
 
@@ -175,7 +192,7 @@ def kquadrant_pocket(df, plot_configs, output_path='/volume'):
         ns, bins, patches =  ax1.hist([var_cond1, var_cond2],
                                     bins=local_config['nbins'],
                                     color=['blue', 'red'],
-                                    histtype='step', 
+                                    histtype='step',
                                     alpha=.5,
                                     label=[local_config['cond1_label'],
                                            local_config['cond2_label']],
@@ -185,7 +202,7 @@ def kquadrant_pocket(df, plot_configs, output_path='/volume'):
         # ratio plot - vulgo puchadinho
         ax2.plot(bins[:-1],     # this is what makes it comparable
                 100*(ns[1] / ns[0]), # maybe check for div-by-zero!
-                '^', 
+                '^',
                 color='black')
 
 
