@@ -11,7 +11,7 @@ In 2017 the ATLAS experiment implemented an ensemble of neural networks (NeuralR
 
 ## What does mean?
 
-KoLMoV (**K**it **o**f **L**earning **M**odels **V**alidation) is a repository that contains somes helpers to calculate the cross validation or pileup linear fit for ringer tuningg derived from (https://github.com/jodafons/saphyra)[saphyra] package.
+KoLMoV (**K**it **o**f **L**earning **M**odels **V**alidation) is a repository that contains somes helpers to calculate the cross validation or pileup linear fit for ringer tuningg derived from [https://github.com/jodafons/saphyra](saphyra) package.
 
 ## How to install?
 
