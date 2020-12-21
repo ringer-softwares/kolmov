@@ -19,7 +19,7 @@ Install from pip:
 ```bash
 pip install kolmov
 ```
-or from the source:
+or from source:
 ```bash
 git clone https://github.com/micaelverissimo/kolmov.git 
 cd kolmov
