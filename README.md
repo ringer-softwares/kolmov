@@ -25,7 +25,6 @@ git clone https://github.com/micaelverissimo/kolmov.git
 cd kolmov
 source scripts/setup.sh
 ```
->**WARNING**: You must have ROOT installed at your system.
 
 
 
