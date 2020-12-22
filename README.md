@@ -1,6 +1,3 @@
-
-[![Build Status](https://travis-ci.org/micaelverissimo/kolmov.svg?branch=master)](https://travis-ci.org/micaelverissimo/kolmov)
-
 # KoLMoV
 
 We should include some description here.
@@ -23,6 +20,12 @@ git clone https://github.com/micaelverissimo/kolmov.git
 cd kolmov
 source scripts/setup.sh
 ```
+
+## Build status:
+
+|  Branch    | Build Status |
+| ---------- | ------------ |
+|   Master   | [![Build Status](https://travis-ci.org/micaelverissimo/kolmov.svg?branch=master)](https://travis-ci.org/micaelverissimo/kolmov) |
 
 ## Notes about ringer project:
 
