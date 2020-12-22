@@ -8,7 +8,7 @@ KoLMoV (**K**it **o**f **L**earning **M**odels **V**alidation) is a repository t
 
 **NOTE** This repository make part of the ringer analysis kit.
 
-## Installation?
+## Installation:
 
 Install from pip:
 ```bash
