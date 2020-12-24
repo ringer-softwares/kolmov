@@ -652,7 +652,7 @@ class fit_table(Logger):
 #
 if __name__ == "__main__":
 
-    from saphyra.utils import crossval_table
+    from kolmov import crossval_table
 
     def create_op_dict(op):
         d = {
