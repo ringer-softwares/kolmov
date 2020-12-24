@@ -13,8 +13,8 @@ from . import plot_functions
 __all__.extend( plot_functions.__all__ )
 from .plot_functions import *
 
-from . import legacy_exports
-__all__.extend( legacy_exports.__all__ )
-from .legacy_exports import *
+#from . import legacy_exports
+#__all__.extend( legacy_exports.__all__ )
+#from .legacy_exports import *
 
 
