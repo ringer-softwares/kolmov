@@ -60,7 +60,17 @@ class fit_table(Logger):
     #
     # Fill correction table
     #
-    def fill( self, data_paths,  models, reference_values, verbose=False ):
+    def fill( self, data_paths,  models, reference_values, output_dir, verbose=False ):
+
+        from Gaugi.monet.AtlasStyle import SetAtlasStyle
+        SetAtlasStyle()
+        # create directory
+        localpath = os.getcwd()+'/'+output_dir
+        try:
+            if not os.path.exists(localpath): os.makedirs(localpath)
+        except:
+            MSG_WARNING( self,'The director %s exist.', localpath)
+
 
 
         # make template dataframe
@@ -166,8 +176,28 @@ class fit_table(Logger):
                 MSG_DEBUG( self, 'Background with correction is: %1.2f%%', background_corrected_num/background_corrected_den * 100 )
 
                 # decore the model array
-                model['thresholds'][name] = {'offset':offset, 'slope':slope, 'threshold' : threshold, 'th2_signal':th2_signal, 'th2_background':th2_background,
-																						 'x_points':x_points, 'y_points':y_points, 'error_points':error_points, 'reference_pd': ref['pd'], 'reference_fa':ref['fa']}
+                model['thresholds'][name] = {'offset':offset,
+                                             'slope':slope,
+                                             'threshold' : threshold,
+                                             'reference_pd': ref['pd'],
+                                             'reference_fa':ref['fa'],
+                                             }
+                paths = []
+
+                # prepate 2D histograms
+                info = models[et_bin][eta_bin]['thresholds'][name]
+                outname = localpath+'/th2_signal_%s_et%d_eta%d'%(name,et_bin,eta_bin)
+                output = self.plot_2d_hist( th2_signal, slope, offset, x_points, y_points, error_points, outname, xlabel='<#mu>',
+                                   etBinIdx=et_bin, etaBinIdx=eta_bin, etBins=self.__etbins,etaBins=self.__etabins)
+                paths.append(output)
+                outname = localpath+'/th2_background_%s_et%d_eta%d'%(name,et_bin,eta_bin)
+                output = self.plot_2d_hist( th2_background, slope, offset, x_points, y_points, error_points, outname, xlabel='<#mu>',
+                                   etBinIdx=et_bin, etaBinIdx=eta_bin, etBins=self.__etbins,etaBins=self.__etabins)
+                paths.append(output)
+
+                model['thresholds'][name]['figures'] = paths
+
+
 
                 # et/eta bin information
                 add( 'name'                        , name )
@@ -209,17 +239,8 @@ class fit_table(Logger):
     #
     # Dump bearmer report
     #
-    def dump_beamer_table( self, table, models, title, output_pdf, output_dir ):
+    def dump_beamer_table( self, table, models, title, output_pdf ):
 
-
-        from Gaugi.monet.AtlasStyle import SetAtlasStyle
-        SetAtlasStyle()
-        # create directory
-        localpath = os.getcwd()+'/'+output_dir
-        try:
-            if not os.path.exists(localpath): os.makedirs(localpath)
-        except:
-            MSG_WARNING( self,'The director %s exist.', localpath)
 
         # Slide maker
         with BeamerTexReportTemplate1( theme = 'Berlin'
@@ -257,20 +278,7 @@ class fit_table(Logger):
                                 current_table = table.loc[ (table.name==name) & (table.et_bin==etBinIdx) & (table.eta_bin==etaBinIdx)]
 
                                 # prepate 2D histograms
-                                info = models[etBinIdx][etaBinIdx]['thresholds'][name]
-                                paths = []
-                                outname = localpath+'/th2_signal_%s_et%d_eta%d'%(name,etBinIdx,etaBinIdx)
-                                output = self.plot_2d_hist( info['th2_signal'], info['slope'], info['offset'], info['x_points'],
-                                            info['y_points'], info['error_points'], outname, xlabel='<#mu>',
-                                            etBinIdx=etBinIdx, etaBinIdx=etaBinIdx,
-                                            etBins=self.__etbins,etaBins=self.__etabins)
-                                paths.append(output)
-                                outname = localpath+'/th2_background_%s_et%d_eta%d'%(name,etBinIdx,etaBinIdx)
-                                output = self.plot_2d_hist( info['th2_background'], info['slope'], info['offset'], info['x_points'],
-                                            info['y_points'], info['error_points'], outname, xlabel='<#mu>',
-                                            etBinIdx=etBinIdx, etaBinIdx=etaBinIdx,
-                                            etBins=self.__etbins,etaBins=self.__etabins)
-                                paths.append(output)
+                                paths = models[etBinIdx][etaBinIdx]['thresholds'][name]['figures']
 
                                 title = 'Energy between %s in %s (et%d\_eta%d)'%(etbins_str[etBinIdx],
                                                                                  etabins_str[etaBinIdx],
@@ -704,10 +712,10 @@ if __name__ == "__main__":
     etabins = [0, 0.8 , 1.37, 1.54, 2.37, 2.5]
 
     cv  = crossval_table( tuned_info, etbins = etbins , etabins = etabins )
-    #cv.fill( '/Volumes/castor/tuning_data/Zee/v10/*.r2/*/*.gz', 'v10')
+    cv.fill( '/Volumes/castor/tuning_data/Zee/v10/*.r2/*/*.gz', 'v10')
     #cv.fill( '/home/jodafons/public/tunings/v10/*.r2/*/*.gz', 'v10')
     #cv.to_csv( 'v10.csv' )
-    cv.from_csv( 'v10.csv' )
+    #cv.from_csv( 'v10.csv' )
     best_inits = cv.filter_inits("max_sp_val")
     best_inits = best_inits.loc[(best_inits.model_idx==0)]
     best_sorts = cv.filter_sorts(best_inits, 'max_sp_val')
@@ -772,12 +780,12 @@ if __name__ == "__main__":
     # get best models
     etbins = [15,20]
     etabins = [0, 0.8]
-    ct  = correction_table( generator, etbins , etabins, 0.02, 0.5, 16, 60 )
-    ct.fill(paths, best_models, ref_matrix)
+    ct  = fit_table( generator, etbins , etabins, 0.02, 0.5, 16, 60 )
+    ct.fill(paths, best_models, ref_matrix, 'test_dir')
 
 
     table = ct.table()
-    ct.dump_beamer_table(table, best_models, 'test', 'test','test_dir')
+    ct.dump_beamer_table(table, best_models, 'test', 'test')
 
     ct.export(best_models, 'model_et%d_eta%d', 'config_tight.conf', 'tight_cutbased', to_onnx=True)
 
