@@ -10,6 +10,7 @@ import glob
 import json
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from Gaugi import Logger, expandFolders
