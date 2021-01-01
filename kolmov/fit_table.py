@@ -41,7 +41,8 @@ class fit_table(Logger):
                  false_alarm_limit=0.5,
                  level=LoggingLevel.INFO,
                  xmin_percentage=1,
-                 xmax_percentage=99):
+                 xmax_percentage=99,
+                 plot_stage='Internal'):
 
         # init base class
         Logger.__init__(self, level=level)
@@ -55,6 +56,7 @@ class fit_table(Logger):
         self.__false_alarm_limit = false_alarm_limit
         self.__xmin_percentage=xmin_percentage
         self.__xmax_percentage=xmax_percentage
+        self.__plot_stage=plot_stage
 
 
     #
@@ -188,11 +190,13 @@ class fit_table(Logger):
                 info = models[et_bin][eta_bin]['thresholds'][name]
                 outname = localpath+'/th2_signal_%s_et%d_eta%d'%(name,et_bin,eta_bin)
                 output = self.plot_2d_hist( th2_signal, slope, offset, x_points, y_points, error_points, outname, xlabel='<#mu>',
-                                   etBinIdx=et_bin, etaBinIdx=eta_bin, etBins=self.__etbins,etaBins=self.__etabins)
+                                   etBinIdx=et_bin, etaBinIdx=eta_bin, etBins=self.__etbins,etaBins=self.__etabins,
+                                   plot_stage=self.__plot_stage)
                 paths.append(output)
                 outname = localpath+'/th2_background_%s_et%d_eta%d'%(name,et_bin,eta_bin)
                 output = self.plot_2d_hist( th2_background, slope, offset, x_points, y_points, error_points, outname, xlabel='<#mu>',
-                                   etBinIdx=et_bin, etaBinIdx=eta_bin, etBins=self.__etbins,etaBins=self.__etabins)
+                                   etBinIdx=et_bin, etaBinIdx=eta_bin, etBins=self.__etbins,etaBins=self.__etabins,
+                                   plot_stage=self.__plot_stage)
                 paths.append(output)
 
                 model['thresholds'][name]['figures'] = paths
@@ -607,47 +611,72 @@ class fit_table(Logger):
     # Plot 2D histogram function based on ROOT used by fit_table class
     #
     def plot_2d_hist( self, th2, slope, offset, x_points, y_points, error_points, outname, xlabel='',
-                      etBinIdx=None, etaBinIdx=None, etBins=None,etaBins=None):
+                      etBinIdx=None, etaBinIdx=None, etBins=None,etaBins=None, plot_stage='Internal'):
 
-        from ROOT import TCanvas, gStyle, TLegend, kRed, kBlue, kBlack,TLine,kBird, kOrange,kGray
+        from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, kRed, kBlue, kBlack,TLine,kBird, kOrange,kGray
         from ROOT import TGraphErrors,TF1,TColor
         import array
 
-        def AddTopLabels(can, etlist = None, etalist = None, etidx = None, etaidx = None, logger=None):
-
-            extraText = [GetAtlasInternalText()]
+        
+        def toStrBin(etlist = None, etalist = None, etidx = None, etaidx = None):
             if etlist and etidx is not None:
                 etlist=copy(etlist)
                 if etlist[-1]>9999:  etlist[-1]='#infty'
                 binEt = (str(etlist[etidx]) + ' < E_{T} [GeV] < ' + str(etlist[etidx+1]) if etidx+1 < len(etlist) else
                                          'E_{T} > ' + str(etlist[etidx]) + ' GeV')
-                extraText.append(binEt)
+                return binEt
             if etalist and etaidx is not None:
-                binEta = (str(etalist[etaidx]) + ' < #eta < ' + str(etalist[etaidx+1]) if etaidx+1 < len(etalist) else
-                                            str(etalist[etaidx]) + ' < #eta < 2.47')
-                extraText.append(binEta)
-            DrawText(can,extraText,.14,.68,.35,.93,totalentries=4)
+                binEta = (str(etalist[etaidx]) + ' < |#eta| < ' + str(etalist[etaidx+1]) if etaidx+1 < len(etalist) else
+                                            str(etalist[etaidx]) + ' <|#eta| < 2.47')
+                return binEta
 
+        def TexLabel(x,y,text,color=1, textfont=42, textsize=0.1):
+            tex = TLatex()
+            tex.SetNDC()
+            tex.SetTextFont(textfont)
+            tex.SetTextColor(color)
+            tex.SetTextSize(textsize)
+            tex.DrawLatex(x,y,text)
+            canvas.Modified()
+            canvas.Update()
+
+        # Create canvas and add 2D histogram
         gStyle.SetPalette(kBird)
-        drawopt='lpE2'
         canvas = TCanvas('canvas','canvas',500, 500)
         canvas.SetRightMargin(0.15)
+        canvas.SetTopMargin(0.15)
         th2.GetXaxis().SetTitle('Neural Network output (Discriminant)')
         th2.GetYaxis().SetTitle(xlabel)
         th2.GetZaxis().SetTitle('Count')
         th2.Draw('colz')
         canvas.SetLogz()
+
+
+        # Add dots and line
         g = TGraphErrors(len(x_points), array.array('d',x_points), array.array('d',y_points), array.array('d',error_points), array.array('d',[0]*len(x_points)))
         g.SetLineWidth(1)
         g.SetLineColor(kBlue)
         g.SetMarkerColor(kBlue)
+        g.SetMarkerStyle(8)
+        g.SetMarkerSize(1)
         g.Draw("P same")
         line = TLine(slope*th2.GetYaxis().GetXmin()+offset,th2.GetYaxis().GetXmin(), slope*th2.GetYaxis().GetXmax()+offset, th2.GetYaxis().GetXmax())
         line.SetLineColor(kBlack)
         line.SetLineWidth(2)
         line.Draw()
-        AddTopLabels( canvas, etlist=etBins,etalist=etaBins,etidx=etBinIdx,etaidx=etaBinIdx)
-        FormatCanvasAxes(canvas, XLabelSize=16, YLabelSize=16, XTitleOffset=0.87, ZLabelSize=14,ZTitleSize=14, YTitleOffset=0.87, ZTitleOffset=1.1)
+
+        # Add text labels into the canvas
+        ATLASLabel(0.16,0.94,plot_stage)
+        canvas.Modified()
+        canvas.Update()
+        text = toStrBin(etlist=etBins, etidx=etBinIdx)
+        text+= ', '+toStrBin(etalist=etaBins, etaidx=etaBinIdx)
+        TexLabel(0.16, 0.885, text, textsize=.035)
+        #TexLabel(0.72, 0.94, 'data16, #sqrt{s}=13 TeV', textsize=0.04)
+
+        
+        # Format and save
+        FormatCanvasAxes(canvas, XLabelSize=16, YLabelSize=16, XTitleOffset=0.87, ZLabelSize=16,ZTitleSize=16, YTitleOffset=0.87, ZTitleOffset=1.1)
         SetAxisLabels(canvas,'Neural Network output (Discriminant)',xlabel)
         canvas.SaveAs(outname+'.pdf')
         canvas.SaveAs(outname+'.C')
@@ -712,10 +741,10 @@ if __name__ == "__main__":
     etabins = [0, 0.8 , 1.37, 1.54, 2.37, 2.5]
 
     cv  = crossval_table( tuned_info, etbins = etbins , etabins = etabins )
-    cv.fill( '/Volumes/castor/tuning_data/Zee/v10/*.r2/*/*.gz', 'v10')
+    #cv.fill( '/Volumes/castor/tuning_data/Zee/v10/*.r2/*/*.gz', 'v10')
     #cv.fill( '/home/jodafons/public/tunings/v10/*.r2/*/*.gz', 'v10')
     #cv.to_csv( 'v10.csv' )
-    #cv.from_csv( 'v10.csv' )
+    cv.from_csv( 'v10.csv' )
     best_inits = cv.filter_inits("max_sp_val")
     best_inits = best_inits.loc[(best_inits.model_idx==0)]
     best_sorts = cv.filter_sorts(best_inits, 'max_sp_val')
