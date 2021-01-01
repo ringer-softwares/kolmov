@@ -140,11 +140,12 @@ class fit_table(Logger):
 
             for name, ref in references.items():
 
+                ref_value = ref['pd']
                 false_alarm = 1.0
                 while false_alarm > self.__false_alarm_limit:
 
                     # Get the threshold when we not apply any linear correction
-                    threshold, _ = self.find_threshold( th2_signal.ProjectionX(), ref['pd'] )
+                    threshold, _ = self.find_threshold( th2_signal.ProjectionX(), ref_value )
 
                     # Get the efficiency without linear adjustment
                     #signal_eff, signal_num, signal_den = self.calculate_num_and_den_from_hist(th2_signal, 0.0, threshold)
@@ -153,7 +154,7 @@ class fit_table(Logger):
                     background_eff, background_num, background_den = self.calculate_num_and_den_from_output(outputs[target!=1], avgmu[target!=1], 0.0, threshold)
 
                     # Apply the linear adjustment and fix it in case of positive slope
-                    slope, offset, x_points, y_points, error_points = self.fit( th2_signal, ref['pd'] )
+                    slope, offset, x_points, y_points, error_points = self.fit( th2_signal, ref_value )
                     slope = 0 if slope>0 else slope
                     offset = threshold if slope>0 else offset
                     if slope>0:
@@ -171,7 +172,7 @@ class fit_table(Logger):
 
                     if false_alarm > self.__false_alarm_limit:
                         # Reduce the reference value by hand
-                        value-=0.0025
+                        ref_value-=0.0025
 
                 MSG_DEBUG( self, 'Reference name: %s, target: %1.2f%%', name, ref['pd']*100 )
                 MSG_DEBUG( self, 'Signal with correction is: %1.2f%%', signal_corrected_num/signal_corrected_den * 100 )
