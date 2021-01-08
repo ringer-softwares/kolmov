@@ -42,7 +42,9 @@ class fit_table(Logger):
                  level=LoggingLevel.INFO,
                  xmin_percentage=1,
                  xmax_percentage=99,
-                 plot_stage='Internal'):
+                 plot_stage='Internal',
+                 xmin=None,
+                 xmax=None):
 
         # init base class
         Logger.__init__(self, level=level)
@@ -57,6 +59,8 @@ class fit_table(Logger):
         self.__xmin_percentage=xmin_percentage
         self.__xmax_percentage=xmax_percentage
         self.__plot_stage=plot_stage
+        self.__xmin=xmin
+        self.__xmax=xmax
 
 
     #
@@ -119,8 +123,8 @@ class fit_table(Logger):
             outputs = model['model'].predict(data, batch_size=1024, verbose=verbose).flatten()
 
             # Get all limits using the output
-            xmin = int(np.percentile(outputs , self.__xmin_percentage))
-            xmax = int(np.percentile(outputs, self.__xmax_percentage))
+            xmin = self.__xmin if self.__xmin else int(np.percentile(outputs , self.__xmin_percentage))
+            xmax = self.__xmax if self.__xmax else int(np.percentile(outputs, self.__xmax_percentage))
 
             MSG_DEBUG(self, 'Setting xmin to %1.2f and xmax to %1.2f', xmin, xmax)
             xbins = int((xmax-xmin)/self.__x_bin_size)
@@ -614,10 +618,9 @@ class fit_table(Logger):
     def plot_2d_hist( self, th2, slope, offset, x_points, y_points, error_points, outname, xlabel='',
                       etBinIdx=None, etaBinIdx=None, etBins=None,etaBins=None, plot_stage='Internal'):
 
-        from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, kRed, kBlue, kBlack,TLine,kBird, kOrange,kGray
+        from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, kAzure, kRed, kBlue, kBlack,TLine,kBird, kOrange,kGray
         from ROOT import TGraphErrors,TF1,TColor
         import array
-
         
         def toStrBin(etlist = None, etalist = None, etidx = None, etaidx = None):
             if etlist and etidx is not None:
@@ -630,19 +633,9 @@ class fit_table(Logger):
                 binEta = (str(etalist[etaidx]) + ' < |#eta| < ' + str(etalist[etaidx+1]) if etaidx+1 < len(etalist) else
                                             str(etalist[etaidx]) + ' <|#eta| < 2.47')
                 return binEta
-
-        def TexLabel(x,y,text,color=1, textfont=42, textsize=0.1):
-            tex = TLatex()
-            tex.SetNDC()
-            tex.SetTextFont(textfont)
-            tex.SetTextColor(color)
-            tex.SetTextSize(textsize)
-            tex.DrawLatex(x,y,text)
-            canvas.Modified()
-            canvas.Update()
-
+        
         # Create canvas and add 2D histogram
-        gStyle.SetPalette(kBird)
+        gStyle.SetPalette(kBird) # default
         canvas = TCanvas('canvas','canvas',500, 500)
         canvas.SetRightMargin(0.15)
         canvas.SetTopMargin(0.15)
@@ -655,8 +648,6 @@ class fit_table(Logger):
 
         # Add dots and line
         g = TGraphErrors(len(x_points), array.array('d',x_points), array.array('d',y_points), array.array('d',error_points), array.array('d',[0]*len(x_points)))
-        g.SetLineWidth(1)
-        g.SetLineColor(kBlue)
         g.SetMarkerColor(kBlue)
         g.SetMarkerStyle(8)
         g.SetMarkerSize(1)
@@ -667,14 +658,10 @@ class fit_table(Logger):
         line.Draw()
 
         # Add text labels into the canvas
-        ATLASLabel(0.16,0.94,plot_stage)
-        canvas.Modified()
-        canvas.Update()
+        AddATLASLabel(canvas, 0.16,0.94,plot_stage)
         text = toStrBin(etlist=etBins, etidx=etBinIdx)
         text+= ', '+toStrBin(etalist=etaBins, etaidx=etaBinIdx)
-        TexLabel(0.16, 0.885, text, textsize=.035)
-        #TexLabel(0.72, 0.94, 'data16, #sqrt{s}=13 TeV', textsize=0.04)
-
+        AddTexLabel(canvas, 0.16, 0.885, text, textsize=.035)
         
         # Format and save
         FormatCanvasAxes(canvas, XLabelSize=16, YLabelSize=16, XTitleOffset=0.87, ZLabelSize=16,ZTitleSize=16, YTitleOffset=0.87, ZTitleOffset=1.1)
@@ -810,7 +797,7 @@ if __name__ == "__main__":
     # get best models
     etbins = [15,20]
     etabins = [0, 0.8]
-    ct  = fit_table( generator, etbins , etabins, 0.02, 0.5, 16, 60 )
+    ct  = fit_table( generator, etbins , etabins, 0.02, 1.5, 16, 60 )
     ct.fill(paths, best_models, ref_matrix, 'test_dir')
 
 
