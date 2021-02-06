@@ -21,12 +21,50 @@ model_from_json = tf.keras.models.model_from_json
 
 
 class crossval_table( Logger ):
-
     #
     # Constructor
     #
     def __init__(self, config_dict, etbins=None, etabins=None ):
+        '''
+        The objective of this class is extract the tuning information from saphyra's output and
+        create a pandas DataFrame using then.
+        The informations used in this DataFrame are listed in info_dict, but the user can add more
+        information from saphyra summary for example.
 
+
+        Arguments:
+
+        - config_dict: a dictionary contains in keys the measures that user want to check and
+        the values need to be a empty list.
+
+        Ex.: info = collections.OrderedDict( {
+              
+              "max_sp_val"      : 'summary/max_sp_val',
+              "max_sp_pd_val"   : 'summary/max_sp_pd_val#0',
+              "max_sp_fa_val"   : 'summary/max_sp_fa_val#0',
+              "max_sp_op"       : 'summary/max_sp_op',
+              "max_sp_pd_op"    : 'summary/max_sp_pd_op#0',
+              "max_sp_fa_op"    : 'summary/max_sp_fa_op#0',
+              'tight_pd_ref'    : "reference/tight_cutbased/pd_ref#0",
+              'tight_fa_ref'    : "reference/tight_cutbased/fa_ref#0",
+              'tight_pd_ref_passed'     : "reference/tight_cutbased/pd_ref#1",
+              'tight_fa_ref_passed'     : "reference/tight_cutbased/fa_ref#1",
+              'tight_pd_ref_total'      : "reference/tight_cutbased/pd_ref#2",
+              'tight_fa_ref_total'      : "reference/tight_cutbased/fa_ref#2",
+              'tight_pd_val_passed'     : "reference/tight_cutbased/pd_val#1",
+              'tight_fa_val_passed'     : "reference/tight_cutbased/fa_val#1",
+              'tight_pd_val_total'      : "reference/tight_cutbased/pd_val#2",
+              'tight_fa_val_total'      : "reference/tight_cutbased/fa_val#2",
+              'tight_pd_op_passed'      : "reference/tight_cutbased/pd_op#1",
+              'tight_fa_op_passed'      : "reference/tight_cutbased/fa_op#1",
+              'tight_pd_op_total'       : "reference/tight_cutbased/pd_op#2",
+              'tight_fa_op_total'       : "reference/tight_cutbased/fa_op#2",
+
+              } )
+
+        - etbins: a list of et bins edges used in training;
+        - etabins: a list of eta bins edges used in training;
+        '''
         Logger.__init__(self)
         self.__table = None
         # Check wanted key type
@@ -39,7 +77,14 @@ class crossval_table( Logger ):
     # Fill the main dataframe with values from the tuning files and convert to pandas dataframe
     #
     def fill(self, path, tag):
+        '''
+        This method will fill the information dictionary and convert then into a pandas DataFrame.
 
+        Arguments.: 
+
+        - path: the path to the tuned files;
+        - tag: the training tag used;
+        '''
         paths = expandFolders( path )
         MSG_INFO(self, "Reading file for %s tag from %s", tag , path)
 
@@ -96,13 +141,33 @@ class crossval_table( Logger ):
     # Convert the table to csv
     #
     def to_csv( self, output ):
-        self.__table.to_csv(output)
+        '''
+        This function will save the pandas Dataframe into a csv file.
+
+        Arguments.:
+
+        - output: the path and the name to be use for save the table.
+
+        Ex.: 
+        m_path = './my_awsome_path
+        m_name = 'my_awsome_name.csv'
+
+        output = os.path.join(m_path, m_name)
+        '''
+        self.__table.to_csv(output, index=False)
 
 
     #
     # Read the table from csv
     #
     def from_csv( self, input ):
+        '''
+        This method is used to read a csv file insted to fill the Dataframe from tuned file.
+
+        Arguments:
+
+        - input: the csv file to be opened;
+        '''
         self.__table = pd.read_csv(input)
 
 
@@ -110,6 +175,9 @@ class crossval_table( Logger ):
     # Get the main table
     #
     def table(self):
+        '''
+        This method will return the pandas Dataframe.
+        '''
         return self.__table
 
 
@@ -117,6 +185,13 @@ class crossval_table( Logger ):
     # Set the main table
     #
     def set_table(self, table):
+        '''
+        This method will set a table indo the main class table.
+
+        Arguments:
+
+        - table: a pandas Dataframe;
+        '''
         self.__table=table
 
 
@@ -124,7 +199,14 @@ class crossval_table( Logger ):
     # Get the value using recursive dictionary navigation
     #
     def __get_value(self, history, local):
+        '''
+        This method will return a value given a history and dictionary with keys.
 
+        Arguments:
+
+        - history: the tuned information file;
+        - local: the path caming from config_dict;
+        '''
         # Protection to not override the history since this is a 'mutable' object
         var = copy.copy(history)
         for key in local.split('/'):
@@ -152,6 +234,9 @@ class crossval_table( Logger ):
     # Get the pandas dataframe
     #
     def table(self):
+        '''
+        This method will return the pandas Dataframe.
+        '''
         return self.__table
 
 
@@ -159,6 +244,13 @@ class crossval_table( Logger ):
     # Return only best inits
     #
     def filter_inits(self, key):
+        '''
+        This method will filter the Dataframe based on given key in order to get the best inits for every sort.
+
+        Arguments:
+
+        - key: the column to be used for filter.
+        '''
         return self.table().loc[self.table().groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax(), :]
 
 
@@ -166,6 +258,13 @@ class crossval_table( Logger ):
     # Get the best sorts from best inits table
     #
     def filter_sorts(self, best_inits, key):
+        '''
+        This method will filter the Dataframe based on given key in order to get the best model for every configuration.
+
+        Arguments:
+
+        - key: the column to be used for filter.
+        ''''
         return best_inits.loc[best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax(), :]
 
 
@@ -173,7 +272,13 @@ class crossval_table( Logger ):
     # Calculate the mean/std table from best inits table
     #
     def describe(self, best_inits ):
+        '''
+        This method will give the mean and std for construct the beamer presentation for each train tag.
 
+        Arguments:
+
+        - best_inits: 
+        '''
         # Create a new dataframe to hold this table
         dataframe = { 'train_tag' : [], 'et_bin' : [], 'eta_bin' : []}
         # Include all wanted keys into the dataframe
@@ -209,7 +314,14 @@ class crossval_table( Logger ):
     # Get tge cross val integrated table from best inits
     #
     def integrate( self, best_inits, tag ):
+        '''
+        This method is used to get the integrate information of a given tag.
 
+        Arguments:
+
+        - best_inits: a pandas Dataframe which contains all information for the best inits.
+        - tag: the training tag that will be integrate.
+        '''
         keys = [ key for key in self.__config_dict.keys() if 'passed' in key or 'total' in key]
         table = best_inits.loc[best_inits.train_tag==tag].groupby(['sort']).agg(dict(zip( keys, ['sum']*len(keys))))
         for key in keys:
@@ -228,6 +340,15 @@ class crossval_table( Logger ):
     # Dump all history for each line in the table
     #
     def dump_all_history( self, table, output_path , tag):
+        '''
+        This method will dump the train history. This is a way to get more easy this information when plotting the train evolution.
+
+        Arguments:
+
+        - table: a table with the path information.
+        - output_path: the path to sabe the hitories.
+        - tag: the train tag.
+        '''
         if not os.path.exists( output_path ):
           os.mkdir( output_path )
         for _ , row in table.iterrows():
@@ -252,11 +373,21 @@ class crossval_table( Logger ):
 
 
 
-		#
-		# Plot the training curves for all sorts.
-		#
+	#
+	# Plot the training curves for all sorts.
+	#
     def plot_training_curves( self, best_inits, best_sorts, dirname, display=False, start_epoch=3 ):
+        '''
+        This method is a shortcut to plot the monitoring traning curves.
 
+        Arguments:
+
+        - best_inits: a pandas Dataframe which contains all information for the best inits;
+        - best_sorts: a pandas Dataframe which contains all information for the best sorts;
+        - dirname: a folder to save the figures, if not exist we'll create and attached in $PWD folder;
+        - display: a boolean to decide if show or not show the plot;
+        - start_epoch: the epoch to start draw the plot.
+        '''
         basepath = os.getcwd()
         if not os.path.exists(basepath+'/'+dirname):
           os.mkdir(basepath+'/'+dirname)
@@ -307,7 +438,27 @@ class crossval_table( Logger ):
 		#
     def plot_roc_curves( self, best_sorts, tags, legends, output, display=False, colors=None, points=None, et_bin=None, eta_bin=None,
                          xmin=-0.02, xmax=0.3, ymin=0.8, ymax=1.02, fontsize=18, figsize=(15,15)):
+        '''
+        This method will plot the ROC curves.
 
+        Arguments:
+
+        - best_sorts: a pandas Dataframe which contains all information for the best sorts;
+        - tag: the tuning tags to be plotted
+        - legends: the legends to used (unused)
+        - output: the path with the name to save the plot;
+        - display: a boolean to decide if show or not show the plot;
+        - colors: the color list to use in plot;
+        - points: the points list to diferenciate the curves (unused);
+        - et_bin: the et bin index
+        - eta_bin: the eta bin index
+        - xmin: x plot lower limit;
+        - xmax: x plot upper limit;
+        - ymin: y plot lower limit;
+        - ymax: y plot upper limit;
+        - fontsize: font size just like in matplotlib
+        - figsize: figure size just like in matplotlib
+        '''
 
         def plot_roc_curves_for_each_bin(ax, table, colors, xmin=-0.02, xmax=0.3, ymin=0.8, ymax=1.02, fontsize=18):
 
@@ -366,7 +517,16 @@ class crossval_table( Logger ):
     # Create the beamer table file
     #
     def dump_beamer_table( self, best_inits, operation_points, output, tags=None, title='' ):
+        '''
+        This method will use a pandas Dataframe in order to create a beamer presentation which summary the tuning cross-validation.
 
+        Arguments:
+        - best_inits: a pandas Dataframe which contains all information for the best inits.
+        - operation_points: the operation point that will be used.
+        - output: a name for the pdf
+        - tags: the training tag that will be used. If None then the tags will be get from the Dataframe.
+        - title: the pdf title
+        '''
         cv_table = self.describe( best_inits )
         # Create Latex Et bins
         etbins_str = []; etabins_str = []
@@ -488,7 +648,15 @@ class crossval_table( Logger ):
     # Load all keras models given the best sort table
     #
     def get_best_models( self, best_sorts , remove_last=True, with_history=False):
+        '''
+        This method will load the best models.
 
+        Arguments: 
+
+        - best_sorts: the table that contains the best_sorts;
+        - remove_last: a bolean variable to remove or not the tanh in tha output layer;
+        - with_history: unused variable.
+        '''
         from tensorflow.keras.models import Model, model_from_json
         import json
 
