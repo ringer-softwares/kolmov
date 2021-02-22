@@ -264,7 +264,7 @@ class crossval_table( Logger ):
         Arguments:
 
         - key: the column to be used for filter.
-        ''''
+        '''
         return best_inits.loc[best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax(), :]
 
 
@@ -547,6 +547,9 @@ class crossval_table( Logger ):
 
         train_tags = cv_table.train_tag.unique() if not tags else tags
 
+        # fix tags to list
+        if type(tags) is str: tags=[tags]
+
         # Apply beamer
         with BeamerTexReportTemplate1( theme = 'Berlin'
                                  , _toPDF = True
@@ -580,6 +583,7 @@ class crossval_table( Logger ):
                             sp_ref = current_table[operation_point+'_sp_ref'].values[0]*100
                             pd_ref = current_table[operation_point+'_pd_ref'].values[0]*100
                             fa_ref = current_table[operation_point+'_fa_ref'].values[0]*100
+
                             cv_values   += [ colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorSP+('%1.2f$\pm$%1.2f')%(sp,sp_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std),    ]
                             ref_values  += [ colorPD+('%1.2f')%(pd_ref), colorSP+('%1.2f')%(sp_ref), colorPF+('%1.2f')%(fa_ref)]
                         if idx > 0:
