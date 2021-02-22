@@ -547,6 +547,9 @@ class crossval_table( Logger ):
 
         train_tags = cv_table.train_tag.unique() if not tags else tags
 
+        # fix tags to list
+        if type(tags) is str: tags=[tags]
+
         # Apply beamer
         with BeamerTexReportTemplate1( theme = 'Berlin'
                                  , _toPDF = True
