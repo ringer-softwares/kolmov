@@ -38,7 +38,7 @@ class crossval_table( Logger ):
         the values need to be a empty list.
 
         Ex.: info = collections.OrderedDict( {
-              
+
               "max_sp_val"      : 'summary/max_sp_val',
               "max_sp_pd_val"   : 'summary/max_sp_pd_val#0',
               "max_sp_fa_val"   : 'summary/max_sp_fa_val#0',
@@ -80,7 +80,7 @@ class crossval_table( Logger ):
         '''
         This method will fill the information dictionary and convert then into a pandas DataFrame.
 
-        Arguments.: 
+        Arguments.:
 
         - path: the path to the tuned files;
         - tag: the training tag used;
@@ -148,7 +148,7 @@ class crossval_table( Logger ):
 
         - output: the path and the name to be use for save the table.
 
-        Ex.: 
+        Ex.:
         m_path = './my_awsome_path
         m_name = 'my_awsome_name.csv'
 
@@ -264,7 +264,7 @@ class crossval_table( Logger ):
         Arguments:
 
         - key: the column to be used for filter.
-        ''''
+        '''
         return best_inits.loc[best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax(), :]
 
 
@@ -277,7 +277,7 @@ class crossval_table( Logger ):
 
         Arguments:
 
-        - best_inits: 
+        - best_inits:
         '''
         # Create a new dataframe to hold this table
         dataframe = { 'train_tag' : [], 'et_bin' : [], 'eta_bin' : []}
@@ -651,7 +651,7 @@ class crossval_table( Logger ):
         '''
         This method will load the best models.
 
-        Arguments: 
+        Arguments:
 
         - best_sorts: the table that contains the best_sorts;
         - remove_last: a bolean variable to remove or not the tanh in tha output layer;
