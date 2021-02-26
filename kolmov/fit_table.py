@@ -25,6 +25,7 @@ import os
 from ROOT import gROOT, kTRUE
 gROOT.SetBatch(kTRUE)
 import ROOT
+from ROOT import kBird,kBlackBody
 ROOT.gErrorIgnoreLevel=ROOT.kFatal
 
 
@@ -43,6 +44,7 @@ class fit_table(Logger):
                  xmin_percentage=1,
                  xmax_percentage=99,
                  plot_stage='Internal',
+                 palette=kBlackBody,
                  xmin=None,
                  xmax=None):
 
@@ -61,6 +63,7 @@ class fit_table(Logger):
         self.__plot_stage=plot_stage
         self.__xmin=xmin
         self.__xmax=xmax
+        self.__palette=palette
 
 
     #
@@ -621,7 +624,7 @@ class fit_table(Logger):
         from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, kAzure, kRed, kBlue, kBlack,TLine,kBird, kOrange,kGray
         from ROOT import TGraphErrors,TF1,TColor
         import array
-        
+
         def toStrBin(etlist = None, etalist = None, etidx = None, etaidx = None):
             if etlist and etidx is not None:
                 etlist=copy(etlist)
@@ -633,9 +636,10 @@ class fit_table(Logger):
                 binEta = (str(etalist[etaidx]) + ' < |#eta| < ' + str(etalist[etaidx+1]) if etaidx+1 < len(etalist) else
                                             str(etalist[etaidx]) + ' <|#eta| < 2.47')
                 return binEta
-        
+
         # Create canvas and add 2D histogram
-        gStyle.SetPalette(kBird) # default
+        #gStyle.SetPalette(kBird) # default
+        gStyle.SetPalette(self.__palette)
         canvas = TCanvas('canvas','canvas',500, 500)
         canvas.SetRightMargin(0.15)
         canvas.SetTopMargin(0.15)
@@ -662,7 +666,7 @@ class fit_table(Logger):
         text = toStrBin(etlist=etBins, etidx=etBinIdx)
         text+= ', '+toStrBin(etalist=etaBins, etaidx=etaBinIdx)
         AddTexLabel(canvas, 0.16, 0.885, text, textsize=.035)
-        
+
         # Format and save
         FormatCanvasAxes(canvas, XLabelSize=16, YLabelSize=16, XTitleOffset=0.87, ZLabelSize=16,ZTitleSize=16, YTitleOffset=0.87, ZTitleOffset=1.1)
         SetAxisLabels(canvas,'Neural Network output (Discriminant)',xlabel)
