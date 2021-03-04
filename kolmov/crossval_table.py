@@ -577,8 +577,8 @@ class crossval_table( Logger ):
                             sp = current_table[operation_point+'_sp_val_mean'].values[0]*100
                             pd = current_table[operation_point+'_pd_val_mean'].values[0]*100
                             fa = current_table[operation_point+'_fa_val_mean'].values[0]*100
-                            sp_std = current_table[operation_point+'_fa_val_std'].values[0]*100
-                            pd_std = current_table[operation_point+'_fa_val_std'].values[0]*100
+                            sp_std = current_table[operation_point+'_sps_val_std'].values[0]*100
+                            pd_std = current_table[operation_point+'_pd_val_std'].values[0]*100
                             fa_std = current_table[operation_point+'_fa_val_std'].values[0]*100
                             sp_ref = current_table[operation_point+'_sp_ref'].values[0]*100
                             pd_ref = current_table[operation_point+'_pd_ref'].values[0]*100
