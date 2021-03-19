@@ -424,12 +424,15 @@ class crossval_table( Logger ):
             else:
                 plt.close(fig)
 
-        tag = best_inits.train_tag.unique()[0]
-        for et_bin in best_inits.et_bin.unique():
-            for eta_bin in best_inits.eta_bin.unique():
-                best_sort = best_sorts.loc[(best_sorts.et_bin==et_bin) & (best_sorts.eta_bin==eta_bin)].sort
-                plot_training_curves_for_each_sort(best_inits, et_bin, eta_bin, best_sort.values[0],
-                    basepath+'/'+dirname+'/train_evolution_et%d_eta%d_%s.pdf'%(et_bin,eta_bin,tag), display, start_epoch)
+        for itag in best_inits.train_tag.unique():
+
+            tag = itag
+            m_best_inits = best_inits.loc[(best_inits.train_tag==tag)]
+            for et_bin in m_best_inits.et_bin.unique():
+                for eta_bin in m_best_inits.eta_bin.unique():
+                    best_sort = best_sorts.loc[(best_sorts.et_bin==et_bin) & (best_sorts.eta_bin==eta_bin) & (best_sorts.train_tag==tag)].sort 
+                    plot_training_curves_for_each_sort(m_best_inits, et_bin, eta_bin, best_sort.values[0],
+                        basepath+'/'+dirname+'/train_evolution_et%d_eta%d_%s.pdf'%(et_bin,eta_bin,tag), display, start_epoch)
 
 
 
@@ -577,7 +580,7 @@ class crossval_table( Logger ):
                             sp = current_table[operation_point+'_sp_val_mean'].values[0]*100
                             pd = current_table[operation_point+'_pd_val_mean'].values[0]*100
                             fa = current_table[operation_point+'_fa_val_mean'].values[0]*100
-                            sp_std = current_table[operation_point+'_sps_val_std'].values[0]*100
+                            sp_std = current_table[operation_point+'_sp_val_std'].values[0]*100
                             pd_std = current_table[operation_point+'_pd_val_std'].values[0]*100
                             fa_std = current_table[operation_point+'_fa_val_std'].values[0]*100
                             sp_ref = current_table[operation_point+'_sp_ref'].values[0]*100
