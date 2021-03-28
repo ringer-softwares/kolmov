@@ -25,6 +25,7 @@ import os
 from ROOT import gROOT, kTRUE
 gROOT.SetBatch(kTRUE)
 import ROOT
+from ROOT import kBird,kBlackBody
 ROOT.gErrorIgnoreLevel=ROOT.kFatal
 
 
@@ -43,6 +44,7 @@ class fit_table(Logger):
                  xmin_percentage=1,
                  xmax_percentage=99,
                  plot_stage='Internal',
+                 palette=kBlackBody,
                  xmin=None,
                  xmax=None):
 
@@ -61,12 +63,13 @@ class fit_table(Logger):
         self.__plot_stage=plot_stage
         self.__xmin=xmin
         self.__xmax=xmax
+        self.__palette=palette
 
 
     #
     # Fill correction table
     #
-    def fill( self, data_paths,  models, reference_values, output_dir, verbose=False ):
+    def fill( self, data_paths,  models, reference_values, output_dir, verbose=False, except_these_bins = [] ):
 
         from Gaugi.monet.AtlasStyle import SetAtlasStyle
         SetAtlasStyle()
@@ -159,10 +162,26 @@ class fit_table(Logger):
 
                     # Apply the linear adjustment and fix it in case of positive slope
                     slope, offset, x_points, y_points, error_points = self.fit( th2_signal, ref_value )
-                    slope = 0 if slope>0 else slope
-                    offset = threshold if slope>0 else offset
-                    if slope>0:
-                      MSG_WARNING(self, "Retrieved positive angular factor of the linear correction, setting to 0!")
+
+                    apply_fit = True
+
+                    # case 1: The user select each bin will not be corrected
+                    for (this_et_bin, this_eta_bin) in except_these_bins:
+                        if et_bin == this_et_bin and eta_bin == this_eta_bin:
+                            apply_fit = False
+                    # case 2: positive slope
+                    if slope > 0:
+                        MSG_WARNING(self, "Retrieved positive angular factor of the linear correction, setting to 0!")
+                        apply_fit = False
+
+
+                    slope = slope if apply_fit else 0
+                    offset = offset if apply_fit else threshold
+
+
+
+
+
 
                     # Get the efficiency with linear adjustment
                     #signal_corrected_eff, signal_corrected_num, signal_corrected_den = self.calculate_num_and_den_from_hist(th2_signal, slope, offset)
@@ -429,6 +448,11 @@ class fit_table(Logger):
 
         from ROOT import TEnv
 
+        try:
+            os.makedirs('models')
+        except:
+            pass
+
         model_etmin_vec = []
         model_etmax_vec = []
         model_etamin_vec = []
@@ -456,8 +480,8 @@ class fit_table(Logger):
                 etBinIdx = model['etBinIdx']
                 etaBinIdx = model['etaBinIdx']
 
-                model_name = model_output_format%( etBinIdx, etaBinIdx )
-                model_paths.append( model_name )
+                model_name = 'models/'+model_output_format%( etBinIdx, etaBinIdx )
+                model_paths.append( model_name+'.onnx' ) #default is onnx since this will be used into the athena base
                 model_json = model['model'].to_json()
                 with open(model_name+".json", "w") as json_file:
                     json_file.write(model_json)
@@ -487,20 +511,20 @@ class fit_table(Logger):
         file.SetValue( "__version__", 'should_be_filled' )
         file.SetValue( "__operation__", reference_name )
         file.SetValue( "__signature__", 'should_be_filled' )
-        file.SetValue( "Model__size"  , str(len(models)) )
+        file.SetValue( "Model__size"  , str(len(model_paths)) )
         file.SetValue( "Model__etmin" , list_to_str(model_etmin_vec) )
         file.SetValue( "Model__etmax" , list_to_str(model_etmax_vec) )
         file.SetValue( "Model__etamin", list_to_str(model_etamin_vec) )
         file.SetValue( "Model__etamax", list_to_str(model_etamax_vec) )
         file.SetValue( "Model__path"  , list_to_str( model_paths ) )
-        file.SetValue( "Threshold__size"  , str(len(models)) )
+        file.SetValue( "Threshold__size"  , str(len(model_paths)) )
         file.SetValue( "Threshold__etmin" , list_to_str(model_etmin_vec) )
         file.SetValue( "Threshold__etmax" , list_to_str(model_etmax_vec) )
         file.SetValue( "Threshold__etamin", list_to_str(model_etamin_vec) )
         file.SetValue( "Threshold__etamax", list_to_str(model_etamax_vec) )
         file.SetValue( "Threshold__slope" , list_to_str(slopes) )
         file.SetValue( "Threshold__offset", list_to_str(offsets) )
-        file.SetValue( "Threshold__MaxAverageMu", 100)
+        file.SetValue( "Threshold__MaxAverageMu", list_to_str([100]*len(model_paths)))
         MSG_INFO( self, "Export all tuning configuration to %s.", conf_output)
         file.WriteFile(conf_output)
 
@@ -621,7 +645,7 @@ class fit_table(Logger):
         from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, kAzure, kRed, kBlue, kBlack,TLine,kBird, kOrange,kGray
         from ROOT import TGraphErrors,TF1,TColor
         import array
-        
+
         def toStrBin(etlist = None, etalist = None, etidx = None, etaidx = None):
             if etlist and etidx is not None:
                 etlist=copy(etlist)
@@ -633,9 +657,10 @@ class fit_table(Logger):
                 binEta = (str(etalist[etaidx]) + ' < |#eta| < ' + str(etalist[etaidx+1]) if etaidx+1 < len(etalist) else
                                             str(etalist[etaidx]) + ' <|#eta| < 2.47')
                 return binEta
-        
+
         # Create canvas and add 2D histogram
-        gStyle.SetPalette(kBird) # default
+        #gStyle.SetPalette(kBird) # default
+        gStyle.SetPalette(self.__palette)
         canvas = TCanvas('canvas','canvas',500, 500)
         canvas.SetRightMargin(0.15)
         canvas.SetTopMargin(0.15)
@@ -662,7 +687,7 @@ class fit_table(Logger):
         text = toStrBin(etlist=etBins, etidx=etBinIdx)
         text+= ', '+toStrBin(etalist=etaBins, etaidx=etaBinIdx)
         AddTexLabel(canvas, 0.16, 0.885, text, textsize=.035)
-        
+
         # Format and save
         FormatCanvasAxes(canvas, XLabelSize=16, YLabelSize=16, XTitleOffset=0.87, ZLabelSize=16,ZTitleSize=16, YTitleOffset=0.87, ZTitleOffset=1.1)
         SetAxisLabels(canvas,'Neural Network output (Discriminant)',xlabel)

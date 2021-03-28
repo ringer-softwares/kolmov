@@ -38,7 +38,7 @@ class crossval_table( Logger ):
         the values need to be a empty list.
 
         Ex.: info = collections.OrderedDict( {
-              
+
               "max_sp_val"      : 'summary/max_sp_val',
               "max_sp_pd_val"   : 'summary/max_sp_pd_val#0',
               "max_sp_fa_val"   : 'summary/max_sp_fa_val#0',
@@ -80,7 +80,7 @@ class crossval_table( Logger ):
         '''
         This method will fill the information dictionary and convert then into a pandas DataFrame.
 
-        Arguments.: 
+        Arguments.:
 
         - path: the path to the tuned files;
         - tag: the training tag used;
@@ -148,7 +148,7 @@ class crossval_table( Logger ):
 
         - output: the path and the name to be use for save the table.
 
-        Ex.: 
+        Ex.:
         m_path = './my_awsome_path
         m_name = 'my_awsome_name.csv'
 
@@ -264,7 +264,7 @@ class crossval_table( Logger ):
         Arguments:
 
         - key: the column to be used for filter.
-        ''''
+        '''
         return best_inits.loc[best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax(), :]
 
 
@@ -277,7 +277,7 @@ class crossval_table( Logger ):
 
         Arguments:
 
-        - best_inits: 
+        - best_inits:
         '''
         # Create a new dataframe to hold this table
         dataframe = { 'train_tag' : [], 'et_bin' : [], 'eta_bin' : []}
@@ -424,12 +424,15 @@ class crossval_table( Logger ):
             else:
                 plt.close(fig)
 
-        tag = best_inits.train_tag.unique()[0]
-        for et_bin in best_inits.et_bin.unique():
-            for eta_bin in best_inits.eta_bin.unique():
-                best_sort = best_sorts.loc[(best_sorts.et_bin==et_bin) & (best_sorts.eta_bin==eta_bin)].sort
-                plot_training_curves_for_each_sort(best_inits, et_bin, eta_bin, best_sort.values[0],
-                    basepath+'/'+dirname+'/train_evolution_et%d_eta%d_%s.pdf'%(et_bin,eta_bin,tag), display, start_epoch)
+        for itag in best_inits.train_tag.unique():
+
+            tag = itag
+            m_best_inits = best_inits.loc[(best_inits.train_tag==tag)]
+            for et_bin in m_best_inits.et_bin.unique():
+                for eta_bin in m_best_inits.eta_bin.unique():
+                    best_sort = best_sorts.loc[(best_sorts.et_bin==et_bin) & (best_sorts.eta_bin==eta_bin) & (best_sorts.train_tag==tag)].sort 
+                    plot_training_curves_for_each_sort(m_best_inits, et_bin, eta_bin, best_sort.values[0],
+                        basepath+'/'+dirname+'/train_evolution_et%d_eta%d_%s.pdf'%(et_bin,eta_bin,tag), display, start_epoch)
 
 
 
@@ -547,6 +550,9 @@ class crossval_table( Logger ):
 
         train_tags = cv_table.train_tag.unique() if not tags else tags
 
+        # fix tags to list
+        if type(tags) is str: tags=[tags]
+
         # Apply beamer
         with BeamerTexReportTemplate1( theme = 'Berlin'
                                  , _toPDF = True
@@ -574,12 +580,13 @@ class crossval_table( Logger ):
                             sp = current_table[operation_point+'_sp_val_mean'].values[0]*100
                             pd = current_table[operation_point+'_pd_val_mean'].values[0]*100
                             fa = current_table[operation_point+'_fa_val_mean'].values[0]*100
-                            sp_std = current_table[operation_point+'_fa_val_std'].values[0]*100
-                            pd_std = current_table[operation_point+'_fa_val_std'].values[0]*100
+                            sp_std = current_table[operation_point+'_sp_val_std'].values[0]*100
+                            pd_std = current_table[operation_point+'_pd_val_std'].values[0]*100
                             fa_std = current_table[operation_point+'_fa_val_std'].values[0]*100
                             sp_ref = current_table[operation_point+'_sp_ref'].values[0]*100
                             pd_ref = current_table[operation_point+'_pd_ref'].values[0]*100
                             fa_ref = current_table[operation_point+'_fa_ref'].values[0]*100
+
                             cv_values   += [ colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorSP+('%1.2f$\pm$%1.2f')%(sp,sp_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std),    ]
                             ref_values  += [ colorPD+('%1.2f')%(pd_ref), colorSP+('%1.2f')%(sp_ref), colorPF+('%1.2f')%(fa_ref)]
                         if idx > 0:
@@ -651,7 +658,7 @@ class crossval_table( Logger ):
         '''
         This method will load the best models.
 
-        Arguments: 
+        Arguments:
 
         - best_sorts: the table that contains the best_sorts;
         - remove_last: a bolean variable to remove or not the tanh in tha output layer;
