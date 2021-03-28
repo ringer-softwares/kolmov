@@ -1,0 +1,69 @@
+name: saphyra-PyPI
+
+on:
+  push:
+    branches:
+      - "master"
+    tags:
+      - "*"
+  pull_request:
+
+jobs:
+  before:
+    name: Check for dependency installation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.8.x"
+          architecture: "x64"
+      - name: Install dependencies
+        run: pip install wheel && pip install --prefer-binary -r requirements.txt
+
+  tests:
+    needs: before
+    name: ${{ matrix.os }}${{ matrix.arch }} - Python ${{ matrix.python-version }} - tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        arch: [x64]
+        python-version: ["3.7.x", "3.8.x"]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: ${{ matrix.arch }}
+      - name: Install dependencies
+        run: pip install wheel && pip install --prefer-binary -r requirements.txt
+      - name: Build saphyra
+        run: |
+          python setup.py install
+      - name: Run tests
+        run: |
+          python ci/main.py
+  build_and_publish:
+    needs: tests
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.8.x"
+          architecture: "x64"
+      - name: Install dependencies
+        run: pip install wheel && pip install --prefer-binary -r requirements.txt
+      - name: Build source distribution
+        run: python setup.py sdist
+      - name: Publish latest on PyPI
+        if: ${{ github.event_name == 'push' }} && ${{ github.ref == 'refs/heads/master' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
