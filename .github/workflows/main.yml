@@ -1,4 +1,4 @@
-name: saphyra-PyPI
+name: kolmov-PyPI
 
 on:
   push:
@@ -40,12 +40,12 @@ jobs:
           architecture: ${{ matrix.arch }}
       - name: Install dependencies
         run: pip install wheel && pip install --prefer-binary -r requirements.txt
-      - name: Build saphyra
+      - name: Build kolmov
         run: |
           python setup.py install
       - name: Run tests
         run: |
-          python ci/main.py
+          bash ./ci/ci_main.sh
   build_and_publish:
     needs: tests
     name: Build and publish to PyPI
