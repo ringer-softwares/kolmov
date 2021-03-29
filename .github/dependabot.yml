@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    target-branch: "master"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    reviewers:
+      - jodafons
+      - gabriel-milan
+      - micaelverissimo
+    assignees:
+      - jodafons
+      - gabriel-milan
+      - micaelverissimo
