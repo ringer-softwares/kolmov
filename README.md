@@ -1,31 +1,32 @@
 # KoLMoV
 
+[![PyPI Version](https://img.shields.io/pypi/v/kolmov)](https://pypi.org/project/kolmov/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/kolmov)](https://github.com/jodafons/kolmov)
+
 We should include some description here.
 
 ## What does mean?
 
-KoLMoV (**K**it **o**f **L**earning **M**odels **V**alidation) is a repository that contains somes helpers to calculate the cross validation or pileup linear fit for ringer tuningg derived from [saphyra](https://github.com/jodafons/saphyra) package.
+KoLMoV (**K**it **o**f **L**earning **M**odels **V**alidation) is a repository that contains somes helpers to calculate the cross validation or pileup linear fit for ringer tuning derived from [saphyra](https://github.com/ringer-atlas/saphyra) package.
 
-**NOTE** This repository make part of the ringer analysis kit.
+**NOTE** This repository is part of the ringer analysis kit.
 
 ## Installation:
 
-Install from pip:
+Install stable version from pip:
 ```bash
 pip install kolmov
 ```
+or install latest version from git:
+```bash
+pip install git+https://github.com/ringer-atlas/kolmov.git@master
+```
 or install from source:
 ```bash
-git clone https://github.com/micaelverissimo/kolmov.git 
+git clone https://github.com/ringer-atlas/kolmov.git 
 cd kolmov
 source scripts/setup.sh
 ```
-
-## Build status:
-
-|  Branch    | Build Status |
-| ---------- | ------------ |
-|   Master   | [![Build Status](https://travis-ci.org/micaelverissimo/kolmov.svg?branch=master)](https://travis-ci.org/micaelverissimo/kolmov) |
 
 ## Notes about ringer project:
 
