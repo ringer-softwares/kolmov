@@ -243,15 +243,19 @@ class crossval_table( Logger ):
     #
     # Return only best inits
     #
-    def filter_inits(self, key):
+    def filter_inits(self, key, use_train_tag=False):
         '''
         This method will filter the Dataframe based on given key in order to get the best inits for every sort.
 
         Arguments:
 
         - key: the column to be used for filter.
+        - use_train_tag: a boolean variable used for group models by tags not by model_idx
         '''
-        return self.table().loc[self.table().groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax(), :]
+        if use_train_tag:
+            return self.table().loc[self.table().groupby(['et_bin', 'eta_bin', 'train_tag', 'sort'])[key].idxmax(), :]
+        else:
+            return self.table().loc[self.table().groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax(), :]
 
 
     #
