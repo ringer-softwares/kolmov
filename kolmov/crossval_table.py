@@ -132,8 +132,9 @@ class crossval_table( Logger ):
                 for key, local  in self.__config_dict.items():
                     dataframe[key].append( self.__get_value( history, local ) )
 
-
-        self.__table = self.__table.append( pd.DataFrame(dataframe) ) if not self.__table is None else pd.DataFrame(dataframe)
+        # append tables if is need
+        # ignoring index to avoid duplicated entries in dataframe
+        self.__table = self.__table.append( pd.DataFrame(dataframe), ignore_index=True ) if not self.__table is None else pd.DataFrame(dataframe)
         MSG_INFO(self, 'End of fill step, a pandas DataFrame was created...')
 
 
@@ -243,19 +244,23 @@ class crossval_table( Logger ):
     #
     # Return only best inits
     #
-    def filter_inits(self, key, use_train_tag=False):
+    def filter_inits(self, key):
         '''
         This method will filter the Dataframe based on given key in order to get the best inits for every sort.
 
         Arguments:
 
         - key: the column to be used for filter.
-        - use_train_tag: a boolean variable used for group models by tags not by model_idx
         '''
-        if use_train_tag:
-            return self.table().loc[self.table().groupby(['et_bin', 'eta_bin', 'train_tag', 'sort'])[key].idxmax(), :]
+        print('MIKA', self.table().train_tag.nunique())
+        if self.table().train_tag.nunique() > 1:
+            print('ENTREI')
+            idxmask = self.table().groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx', 'sort'])[key].idxmax().values
+            return self.table().iloc[idxmask]
         else:
-            return self.table().loc[self.table().groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax(), :]
+            print('ENTREI NAO')
+            idxmask = self.table().groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax().values
+            return self.table().loc[idxmask]
 
 
     #
@@ -269,7 +274,12 @@ class crossval_table( Logger ):
 
         - key: the column to be used for filter.
         '''
-        return best_inits.loc[best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax(), :]
+        if self.table().train_tag.nunique() > 1:
+            idxmask = best_inits.groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx'])[key].idxmax().values
+            return best_inits.iloc[idxmask]
+        else:
+            idxmask = best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax().values
+            return best_inits.iloc[idxmask]
 
 
     #
