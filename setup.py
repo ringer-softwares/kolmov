@@ -21,7 +21,7 @@ setup(
     install_requires=[
         "numpy>=1.16.6,<2.0a0",
         "pandas==1.2.3",
-        "matplotlib==3.4.0",
+        "matplotlib==3.4.1",
         "seaborn==0.11.1",
         "Gaugi>=1.0.0",
         "tensorflow==2.4.1",
