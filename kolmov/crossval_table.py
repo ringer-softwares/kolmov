@@ -252,7 +252,6 @@ class crossval_table( Logger ):
 
         - key: the column to be used for filter.
         '''
-        print('MIKA', self.table().train_tag.nunique())
         if self.table().train_tag.nunique() > 1:
             idxmask = self.table().groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx', 'sort'])[key].idxmax().values
             return self.table().iloc[idxmask]
