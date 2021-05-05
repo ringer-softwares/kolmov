@@ -53,10 +53,10 @@ class training_curves( Logger ):
 
         Logger.__init__( self )
         self.plot_names = {
-                            'loss'          : 'Loss Function Evolution',
-                            'max_sp_val'    : r'$SP$ Index Evolution',
-                            'max_sp_pd_val' : r'$P_D$ Evolution',
-                            'max_sp_fa_val' : r'$F_A$ Evolution',
+                            'loss' : 'Loss Function Evolution',
+                            'sp'   : r'$SP$ Index Evolution',
+                            'pd'  : r'$P_D$ Evolution',
+                            'fa'  : r'$F_A$ Evolution',
                             }
 
         self.h_dict         = self.load(path, model_idx)
@@ -77,6 +77,9 @@ class training_curves( Logger ):
         MSG_INFO( self, "Reading %d files...", len(paths) )
         h_dict = dict()
         for path in paths:
+            if path.split('.')[-1] != 'json':
+                continue
+            
             with open(path) as f:
                 obj = dict(eval(json.load(f)))
                 key = 'et%d_eta%d_sort_%d' %(obj['loc']['et_bin'], obj['loc']['eta_bin'], obj['loc']['sort'])
@@ -113,7 +116,7 @@ class training_curves( Logger ):
 
 
         # train indicators (today we use only this)
-        train_indicators = [('loss', 'val_loss'), 'max_sp_val', 'max_sp_pd_val', 'max_sp_fa_val']
+        train_indicators = [('loss', 'val_loss'), ('sp', 'val_sp'), ('pd', 'val_pd'), ('fa', 'val_fa')]
         # create a subplots and fill then.
         fig, ax = plt.subplots( nrows=len(wanted_h_keys),
                                 ncols=len(train_indicators),
@@ -130,7 +133,7 @@ class training_curves( Logger ):
                     ax[idx, jdx].set_xlabel('Epochs')
                     ax[idx, jdx].plot(self.h_dict[isort][train_ind[0]], c='r', label='Train Step')
                     ax[idx, jdx].plot(self.h_dict[isort][train_ind[1]], c='b', label='Validation Step')
-                    ax[idx, jdx].axvline(x=self.h_dict[isort]['max_sp_best_epoch_val'][-1], label='Best Epoch',
+                    ax[idx, jdx].axvline(x=len(self.h_dict[isort][train_ind[1]])-25, label='Best Epoch',
                                          c='black', lw=1.25, ls='--')
                     ax[idx, jdx].legend()
                     ax[idx, jdx].grid()
@@ -148,7 +151,7 @@ class training_curves( Logger ):
         # save figure
         fig.savefig(os.path.join(plot_path, '%s.png' %(plot_name)),
                     dpi=300,
-                    bbox_inches='tight')
+                    bbox_inches='tight', facecolor='white')
         plt.close();
         return
 

@@ -28,7 +28,8 @@ import ROOT
 from ROOT import kBird,kBlackBody
 ROOT.gErrorIgnoreLevel=ROOT.kFatal
 
-
+# allow gpu growth 
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
 #
 # Linear correction class table
@@ -69,7 +70,8 @@ class fit_table(Logger):
     #
     # Fill correction table
     #
-    def fill( self, data_paths,  models, reference_values, output_dir, verbose=False, except_these_bins = [] ):
+    def fill( self, data_paths,  models, reference_values, output_dir,
+              verbose=False, except_these_bins = [] ):
 
         from Gaugi.monet.AtlasStyle import SetAtlasStyle
         SetAtlasStyle()
@@ -146,8 +148,14 @@ class fit_table(Logger):
             MSG_DEBUG( self, 'Applying linear correction to et%d_eta%d bin.', et_bin, eta_bin)
 
             for name, ref in references.items():
+                
+                if ref['pd_epsilon'] == 0.0:
+                    ref_value = ref['pd']
+                else:
+                    add_fac = (1-ref['pd'])*ref['pd_epsilon']
+                    ref_value = ref['pd'] + add_fac
+                    MSG_INFO(self, 'Add %1.2f %% in reference pd -> new reference pd: %1.2f', ref['pd_epsilon'], add_fac)
 
-                ref_value = ref['pd']
                 false_alarm = 1.0
                 while false_alarm > self.__false_alarm_limit:
 
@@ -162,7 +170,8 @@ class fit_table(Logger):
 
                     # Apply the linear adjustment and fix it in case of positive slope
                     slope, offset, x_points, y_points, error_points = self.fit( th2_signal, ref_value )
-
+                    
+                    # put inside of the ref array
                     apply_fit = True
 
                     # case 1: The user select each bin will not be corrected
