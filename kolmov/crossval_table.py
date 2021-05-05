@@ -14,9 +14,9 @@ import numpy as np
 import pandas as pd
 import os
 import json
+import joblib
 import tensorflow as tf
 model_from_json = tf.keras.models.model_from_json
-
 
 
 
@@ -274,10 +274,10 @@ class crossval_table( Logger ):
         '''
         if self.table().train_tag.nunique() > 1:
             idxmask = best_inits.groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx'])[key].idxmax().values
-            return best_inits.iloc[idxmask]
+            return best_inits.loc[idxmask]
         else:
             idxmask = best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax().values
-            return best_inits.iloc[idxmask]
+            return best_inits.loc[idxmask]
 
 
     #
@@ -370,7 +370,10 @@ class crossval_table( Logger ):
             history = load( row.file_name )['tunedData'][row.tuned_idx]['history']
             history['loc'] = {'et_bin' : row.et_bin, 'eta_bin' : row.eta_bin, 'sort' : row.sort, 'model_idx' : row.model_idx}
             name = 'history_et_%i_eta_%i_model_%i_sort_%i.json' % (row.et_bin,row.eta_bin,row.model_idx,row.sort)
-            with open(os.path.join(output_path, '%s' %name), 'w') as fp:
+            jbl_name = 'history_et_%i_eta_%i_model_%i_sort_%i.joblib' % (row.et_bin,row.eta_bin,row.model_idx,row.sort)
+            joblib.dump(history['summary'], os.path.join(output_path, jbl_name))
+            history.pop('summary')
+            with open(os.path.join(output_path, '%s' %name), 'w', encoding='utf-8') as fp:
                 #json.dump(transform_serialize(history), fp)
                 json.dump(str(history), fp)
 
@@ -413,7 +416,7 @@ class crossval_table( Logger ):
                 current_table = table.loc[table.sort==sort]
                 path=current_table.file_name.values[0]
                 history = self.get_model( path, current_table.model_idx.values[0])['history']
-
+                
                 best_epoch = history['max_sp_best_epoch_val'][-1] - start_epoch
                 # Make the plot here
                 ax[idx, 0].set_xlabel('Epochs')
@@ -589,6 +592,7 @@ class crossval_table( Logger ):
                         cv_values=[]; ref_values=[]
                         for etBinIdx in range(len(self.__etbins) - 1):
                             current_table = cv_table.loc[ (cv_table.train_tag==tag) & (cv_table.et_bin==etBinIdx) & (cv_table.eta_bin==etaBinIdx) ]
+
                             sp = current_table[operation_point+'_sp_val_mean'].values[0]*100
                             pd = current_table[operation_point+'_pd_val_mean'].values[0]*100
                             fa = current_table[operation_point+'_fa_val_mean'].values[0]*100
