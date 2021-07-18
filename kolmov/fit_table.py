@@ -133,15 +133,26 @@ class fit_table(Logger):
 
             MSG_DEBUG(self, 'Setting xmin to %1.2f and xmax to %1.2f', xmin, xmax)
             xbins = int((xmax-xmin)/self.__x_bin_size)
-            ybins = int((self.__ymax-self.__ymin)/self.__y_bin_size)
 
             # Fill 2D histograms
             from ROOT import TH2F
             import array
-            th2_signal = TH2F( 'th2_signal_et%d_eta%d'%(et_bin,eta_bin), '', xbins, xmin, xmax, ybins, self.__ymin, self.__ymax )
+            if type(self.__y_bin_size ) is float:
+                ybins = int((self.__ymax-self.__ymin)/self.__y_bin_size)
+                th2_signal = TH2F( 'th2_signal_et%d_eta%d'%(et_bin,eta_bin), '', xbins, xmin, xmax, ybins, self.__ymin, self.__ymax )
+                th2_background = TH2F( 'th2_background_et%d_eta%d'%(et_bin,eta_bin), '', xbins,xmin, xmax, ybins, self.__ymin, self.__ymax )
+            
+            else:
+                y_bins_edges = self.__y_bin_size[et_bin][eta_bin]
+                th2_signal = TH2F( 'th2_signal_et%d_eta%d'%(et_bin,eta_bin), '', xbins, xmin, xmax, 
+                                 len(y_bins_edges)-1, array.array('d', y_bins_edges))
+                th2_background = TH2F( 'th2_background_et%d_eta%d'%(et_bin,eta_bin), '', xbins,xmin, xmax, 
+                                        len(y_bins_edges)-1, array.array('d', y_bins_edges) )
+
+            # fill hists
             w = array.array( 'd', np.ones_like( outputs[target==1] ) )
             th2_signal.FillN( len(outputs[target==1]), array.array('d',  outputs[target==1].tolist()),  array.array('d',avgmu[target==1].tolist()), w)
-            th2_background = TH2F( 'th2_background_et%d_eta%d'%(et_bin,eta_bin), '', xbins,xmin, xmax, ybins, self.__ymin, self.__ymax )
+            
             w = array.array( 'd', np.ones_like( outputs[target==0] ) )
             th2_background.FillN( len(outputs[target==0]), array.array('d',outputs[target!=1].tolist()), array.array('d',avgmu[target!=1].tolist()), w)
 

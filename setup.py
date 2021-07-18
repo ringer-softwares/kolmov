@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='kolmov',
-    version='2.0.3',
+    version='2.0.4',
     license='GPL-3.0',
     description='A Framework for performing cross validation for Ringer tunings',
     long_description=long_description,
@@ -24,7 +24,7 @@ setup(
         "matplotlib==3.4.2",
         "seaborn==0.11.1",
         "Gaugi>=1.0.0",
-        "tensorflow==2.5.0",
+        "tensorflow==2.3.1",
         "scikit-learn==0.24.2",
         "onnxruntime==1.8.0",
         "keras2onnx==1.7.0"
