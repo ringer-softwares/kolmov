@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name='kolmov',
-    version='2.0.4',
+    version='2.0.5',
     license='GPL-3.0',
     description='A Framework for performing cross validation for Ringer tunings',
     long_description=long_description,
