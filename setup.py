@@ -20,7 +20,7 @@ setup(
               'ai', 'plotting', 'data-visualization'],
     install_requires=[
         "numpy>=1.16.6,<2.0a0",
-        "pandas==1.2.4",
+        "pandas==1.3.0",
         "matplotlib==3.4.2",
         "seaborn==0.11.1",
         "Gaugi>=1.0.0",
