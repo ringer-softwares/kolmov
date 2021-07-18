@@ -254,7 +254,7 @@ class crossval_table( Logger ):
         '''
         if self.table().train_tag.nunique() > 1:
             idxmask = self.table().groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx', 'sort'])[key].idxmax().values
-            return self.table().iloc[idxmask]
+            return self.table().loc[idxmask]
         else:
             idxmask = self.table().groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax().values
             return self.table().loc[idxmask]
@@ -297,7 +297,7 @@ class crossval_table( Logger ):
             if 'passed' in key: # Skip counts
                 continue
             elif ('op' in key) or ('val' in key):
-                dataframe[key+'_mean'] = []; dataframe[key+'_std'] = [];
+                dataframe[key+'_mean'] = []; dataframe[key+'_std'] = []
             else:
                 dataframe[key] = []
 
