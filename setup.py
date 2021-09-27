@@ -25,7 +25,7 @@ setup(
         "seaborn==0.11.1",
         "Gaugi>=1.0.0",
         "tensorflow==2.3.1",
-        "scikit-learn==0.24.2",
+        "scikit-learn==1.0",
         "onnxruntime==1.8.0",
         "keras2onnx==1.7.0"
     ],
