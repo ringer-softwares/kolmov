@@ -2,11 +2,11 @@
 
 __all__ = ['crossval_table']
 
-from Gaugi.tex import *
-from Gaugi.messenger.macros import *
-from Gaugi import Logger, expandFolders, load
-from functools import reduce
+from Gaugi.macros import *
+from Gaugi import Logger, expand_folders, load, progressbar
+from pybeamer import *
 
+from functools import reduce
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import collections, os, glob, json, copy, re
@@ -20,7 +20,7 @@ model_from_json = tf.keras.models.model_from_json
 
 
 
-class crossval_table( Logger ):
+class crossval_table( object ):
     #
     # Constructor
     #
@@ -65,7 +65,9 @@ class crossval_table( Logger ):
         - etbins: a list of et bins edges used in training;
         - etabins: a list of eta bins edges used in training;
         '''
-        Logger.__init__(self)
+        print('to aki')
+        #Logger.__init__(self)
+        print('passei por aki')
         self.__table = None
         # Check wanted key type
         self.__config_dict = collections.OrderedDict(config_dict) if type(config_dict) is dict else config_dict
@@ -85,8 +87,8 @@ class crossval_table( Logger ):
         - path: the path to the tuned files;
         - tag: the training tag used;
         '''
-        paths = expandFolders( path )
-        MSG_INFO(self, "Reading file for %s tag from %s", tag , path)
+        paths = expand_folders( path )
+        #MSG_INFO(self, "Reading file for %s tag from %s", tag , path)
 
         # Creating the dataframe
         dataframe = collections.OrderedDict({
@@ -105,11 +107,15 @@ class crossval_table( Logger ):
         for varname in self.__config_dict.keys():
             dataframe[varname] = []
 
-        MSG_INFO(self, 'There are %i files for this task...' %(len(paths)))
-        MSG_INFO(self, 'Filling the table... ')
+        #MSG_INFO(self, 'There are %i files for this task...' %(len(paths)))
+        #MSG_INFO(self, 'Filling the table... ')
 
-        for ituned_file_name in paths:
-            gfile = load(ituned_file_name)
+        for ituned_file_name in progressbar( paths , 'Reading %s...'%tag):
+            try:
+                gfile = load(ituned_file_name)
+            except:
+                #MSG_WARNING(self, "File %s not open. skip.", ituned_file_name)
+                continue
             tuned_file = gfile['tunedData']
 
             for idx, ituned in enumerate(tuned_file):
@@ -135,7 +141,7 @@ class crossval_table( Logger ):
         # append tables if is need
         # ignoring index to avoid duplicated entries in dataframe
         self.__table = self.__table.append( pd.DataFrame(dataframe), ignore_index=True ) if not self.__table is None else pd.DataFrame(dataframe)
-        MSG_INFO(self, 'End of fill step, a pandas DataFrame was created...')
+        #MSG_INFO(self, 'End of fill step, a pandas DataFrame was created...')
 
 
     #
@@ -772,13 +778,14 @@ if __name__ == "__main__":
 
     #cv.fill( '/Volumes/castor/tuning_data/Zee/v10/*.r2/*/*.gz', 'v10')
     #cv.to_csv( 'v10.csv' )
-    cv.from_csv( 'v10.csv' )
+    path = '/home/jodafons/git_repos/ringer/jodafons_analysis/2021/tunings_v7_to_v2_el_analysis/output/table_v8.csv'
+    cv.from_csv( path )
     best_inits = cv.filter_inits("max_sp_val")
     best_inits = best_inits.loc[(best_inits.model_idx==0)]
     best_sorts = cv.filter_sorts(best_inits, 'max_sp_val')
 
     print(best_inits.head())
-    cv.dump_beamer_table( best_inits, ['vloose'], 'test', tags=['v10'], title='' )
+    cv.dump_beamer_table( best_inits, ['vloose'], 'test', tags=['v8'], title='' )
     #cv.plot_training_curves( best_inits, best_sorts, 'v11' )
 
 

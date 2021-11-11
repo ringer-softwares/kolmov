@@ -13,8 +13,8 @@ import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from Gaugi import Logger, expandFolders
-from Gaugi.messenger.macros import *
+from Gaugi import Logger, expand_folders
+from Gaugi.macros import *
 
 from kolmov.utils.constants import str_etbins_zee, str_etabins
 

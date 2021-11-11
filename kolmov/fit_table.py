@@ -5,12 +5,8 @@
 
 __all__ = ['fit_table']
 
-from Gaugi.messenger import Logger, LoggingLevel
-from Gaugi.messenger.macros import *
-from Gaugi.tex import *
-from Gaugi.monet.AtlasStyle import *
-from Gaugi.monet.PlotFunctions import *
-from Gaugi.monet.TAxisFunctions import *
+from Gaugi import Logger, LoggingLevel
+from Gaugi.macros import *
 from Gaugi import progressbar
 from copy import copy
 from itertools import product

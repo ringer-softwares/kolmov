@@ -11,7 +11,7 @@ import pandas as pd
 from itertools import product
 from tensorflow.keras.models import model_from_json
 from Gaugi import Logger
-from Gaugi.messenger.macros import *
+from Gaugi.macros import *
 from Gaugi import load as gload
 
 
