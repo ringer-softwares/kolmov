@@ -7,22 +7,30 @@ __all__ = ['fit_table']
 
 from Gaugi import Logger, LoggingLevel
 from Gaugi.macros import *
-from Gaugi import progressbar
+
+from tqdm import tqdm
 from copy import copy
 from itertools import product
 
 import numpy as np
 import pandas
 import time
+import array
 import collections
 import os
 
 
-from ROOT import gROOT, kTRUE
-gROOT.SetBatch(kTRUE)
 import ROOT
-from ROOT import kBird,kBlackBody
-ROOT.gErrorIgnoreLevel=ROOT.kFatal
+from ROOT import kBird,kBlackBody,kTRUE
+from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, TEnv, gROOT, TLine
+from ROOT import kAzure, kRed, kBlue, kBlack,kBird, kOrange,kGray
+from ROOT import TGraphErrors,TF1,TColor
+
+import rootplotlib as rpl
+
+rpl.set_atlas_style()
+rpl.suppress_root_warnings()
+gROOT.SetBatch(kTRUE)
 
 # allow gpu growth 
 os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
@@ -67,10 +75,9 @@ class fit_table(Logger):
     # Fill correction table
     #
     def fill( self, data_paths,  models, reference_values, output_dir,
-              verbose=False, except_these_bins = [] ):
+              verbose=False, except_these_bins = [], labels=None ):
 
-        from Gaugi.monet.AtlasStyle import SetAtlasStyle
-        SetAtlasStyle()
+        
         # create directory
         localpath = os.getcwd()+'/'+output_dir
         try:
@@ -109,10 +116,9 @@ class fit_table(Logger):
         def add(key,value):
           dataframe[key].append(value)
 
-
+        bins = list(product(range(len(self.__etbins)-1),range(len(self.__etabins)-1)))
         # Loop over all et/eta bins
-        for et_bin, eta_bin in progressbar(product(range(len(self.__etbins)-1),range(len(self.__etabins)-1)),
-                                           (len(self.__etbins)-1)*(len(self.__etabins)-1), prefix = "Fitting... " ):
+        for et_bin, eta_bin in tqdm( bins , desc= 'Fitting... ', ncols=70):
             path = data_paths[et_bin][eta_bin]
             data, target, avgmu = self.__generator(path)
             references = reference_values[et_bin][eta_bin]
@@ -226,17 +232,23 @@ class fit_table(Logger):
                                              }
                 paths = []
 
-                # prepate 2D histograms
+                #
+                # Plot histograms
+                #
+
+                label = self.__plot_stage + ', #it{%s}'%ref['label']
                 info = models[et_bin][eta_bin]['thresholds'][name]
-                outname = localpath+'/th2_signal_%s_et%d_eta%d'%(name,et_bin,eta_bin)
+
+                outname = localpath+'/th2_signal_%s_et%d_eta%d.pdf'%(name,et_bin,eta_bin)
                 output = self.plot_2d_hist( th2_signal, slope, offset, x_points, y_points, error_points, outname, xlabel='<#mu>',
                                    etBinIdx=et_bin, etaBinIdx=eta_bin, etBins=self.__etbins,etaBins=self.__etabins,
-                                   plot_stage=self.__plot_stage)
+                                   label=label, ref_value=ref['pd'], pd_value=signal_num/signal_den)
                 paths.append(output)
-                outname = localpath+'/th2_background_%s_et%d_eta%d'%(name,et_bin,eta_bin)
+
+                outname = localpath+'/th2_background_%s_et%d_eta%d.pdf'%(name,et_bin,eta_bin)
                 output = self.plot_2d_hist( th2_background, slope, offset, x_points, y_points, error_points, outname, xlabel='<#mu>',
                                    etBinIdx=et_bin, etaBinIdx=eta_bin, etBins=self.__etbins,etaBins=self.__etabins,
-                                   plot_stage=self.__plot_stage)
+                                   label=label, ref_value=ref['pd'], pd_value=signal_num/signal_den)
                 paths.append(output)
 
                 model['thresholds'][name]['figures'] = paths
@@ -271,7 +283,7 @@ class fit_table(Logger):
 
         # convert to pandas dataframe
         self.__table = pandas.DataFrame( dataframe )
-
+        return self.__table
 
     #
     # Get the pandas table
@@ -284,7 +296,6 @@ class fit_table(Logger):
     # Dump bearmer report
     #
     def dump_beamer_table( self, table, models, title, output_pdf ):
-
 
         # Slide maker
         with BeamerTexReportTemplate1( theme = 'Berlin'
@@ -462,7 +473,6 @@ class fit_table(Logger):
     #
     def export( self, models, model_output_format , conf_output, reference_name, to_onnx=False):
 
-        from ROOT import TEnv
 
         try:
             os.makedirs('models')
@@ -656,11 +666,10 @@ class fit_table(Logger):
     # Plot 2D histogram function based on ROOT used by fit_table class
     #
     def plot_2d_hist( self, th2, slope, offset, x_points, y_points, error_points, outname, xlabel='',
-                      etBinIdx=None, etaBinIdx=None, etBins=None,etaBins=None, plot_stage='Internal'):
+                      etBinIdx=None, etaBinIdx=None, etBins=None,etaBins=None, label='Internal',
+                      ref_value=None, pd_value=None):
 
-        from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, kAzure, kRed, kBlue, kBlack,TLine,kBird, kOrange,kGray
-        from ROOT import TGraphErrors,TF1,TColor
-        import array
+
 
         def toStrBin(etlist = None, etalist = None, etidx = None, etaidx = None):
             if etlist and etidx is not None:
@@ -674,42 +683,41 @@ class fit_table(Logger):
                                             str(etalist[etaidx]) + ' <|#eta| < 2.47')
                 return binEta
 
-        # Create canvas and add 2D histogram
-        #gStyle.SetPalette(kBird) # default
+        canvas = TCanvas("canvas","canvas",500,500)
+        rpl.set_figure(canvas)
         gStyle.SetPalette(self.__palette)
-        canvas = TCanvas('canvas','canvas',500, 500)
         canvas.SetRightMargin(0.15)
         canvas.SetTopMargin(0.15)
+        canvas.SetLogz()
+
         th2.GetXaxis().SetTitle('Neural Network output (Discriminant)')
         th2.GetYaxis().SetTitle(xlabel)
         th2.GetZaxis().SetTitle('Count')
         th2.Draw('colz')
-        canvas.SetLogz()
 
-
-        # Add dots and line
         g = TGraphErrors(len(x_points), array.array('d',x_points), array.array('d',y_points), array.array('d',error_points), array.array('d',[0]*len(x_points)))
         g.SetMarkerColor(kBlue)
         g.SetMarkerStyle(8)
         g.SetMarkerSize(1)
         g.Draw("P same")
+
         line = TLine(slope*th2.GetYaxis().GetXmin()+offset,th2.GetYaxis().GetXmin(), slope*th2.GetYaxis().GetXmax()+offset, th2.GetYaxis().GetXmax())
         line.SetLineColor(kBlack)
         line.SetLineWidth(2)
         line.Draw()
 
         # Add text labels into the canvas
-        AddATLASLabel(canvas, 0.16,0.94,plot_stage)
         text = toStrBin(etlist=etBins, etidx=etBinIdx)
         text+= ', '+toStrBin(etalist=etaBins, etaidx=etaBinIdx)
-        AddTexLabel(canvas, 0.16, 0.885, text, textsize=.035)
 
-        # Format and save
-        FormatCanvasAxes(canvas, XLabelSize=16, YLabelSize=16, XTitleOffset=0.87, ZLabelSize=16,ZTitleSize=16, YTitleOffset=0.87, ZTitleOffset=1.1)
-        SetAxisLabels(canvas,'Neural Network output (Discriminant)',xlabel)
-        canvas.SaveAs(outname+'.pdf')
-        canvas.SaveAs(outname+'.C')
-        return outname+'.pdf'
+        if ref_value and pd_value:
+            text+=', P_{D} = %1.2f (%1.2f) [%%]'%(pd_value*100, ref_value*100)
+
+        rpl.add_text(0.15, 0.885, text, textsize=.03)
+        rpl.set_atlas_label(0.15, 0.94, label)
+        rpl.format_canvas_axes(XLabelSize=16, YLabelSize=16, XTitleOffset=0.87, ZLabelSize=16,ZTitleSize=16, YTitleOffset=0.87, ZTitleOffset=1.1)
+        canvas.SaveAs(outname)
+        return outname
 
 
 

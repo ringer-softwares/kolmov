@@ -20,7 +20,7 @@ model_from_json = tf.keras.models.model_from_json
 
 
 
-class crossval_table( object ):
+class crossval_table( Logger ):
     #
     # Constructor
     #
@@ -65,9 +65,7 @@ class crossval_table( object ):
         - etbins: a list of et bins edges used in training;
         - etabins: a list of eta bins edges used in training;
         '''
-        print('to aki')
-        #Logger.__init__(self)
-        print('passei por aki')
+        Logger.__init__(self)
         self.__table = None
         # Check wanted key type
         self.__config_dict = collections.OrderedDict(config_dict) if type(config_dict) is dict else config_dict
@@ -88,7 +86,7 @@ class crossval_table( object ):
         - tag: the training tag used;
         '''
         paths = expand_folders( path )
-        #MSG_INFO(self, "Reading file for %s tag from %s", tag , path)
+        MSG_INFO(self, "Reading file for %s tag from %s", tag , path)
 
         # Creating the dataframe
         dataframe = collections.OrderedDict({
@@ -141,7 +139,7 @@ class crossval_table( object ):
         # append tables if is need
         # ignoring index to avoid duplicated entries in dataframe
         self.__table = self.__table.append( pd.DataFrame(dataframe), ignore_index=True ) if not self.__table is None else pd.DataFrame(dataframe)
-        #MSG_INFO(self, 'End of fill step, a pandas DataFrame was created...')
+        MSG_INFO(self, 'End of fill step, a pandas DataFrame was created...')
 
 
     #
@@ -550,6 +548,7 @@ class crossval_table( object ):
         - tags: the training tag that will be used. If None then the tags will be get from the Dataframe.
         - title: the pdf title
         '''
+
         cv_table = self.describe( best_inits )
         # Create Latex Et bins
         etbins_str = []; etabins_str = []
@@ -784,7 +783,6 @@ if __name__ == "__main__":
     best_inits = best_inits.loc[(best_inits.model_idx==0)]
     best_sorts = cv.filter_sorts(best_inits, 'max_sp_val')
 
-    print(best_inits.head())
     cv.dump_beamer_table( best_inits, ['vloose'], 'test', tags=['v8'], title='' )
     #cv.plot_training_curves( best_inits, best_sorts, 'v11' )
 
