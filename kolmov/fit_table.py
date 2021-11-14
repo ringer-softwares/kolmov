@@ -5,7 +5,7 @@
 
 __all__ = ['fit_table']
 
-from Gaugi import Logger, LoggingLevel
+from Gaugi import Logger, LoggingLevel, StoreGate, restoreStoreGate
 from Gaugi.macros import *
 
 from tqdm import tqdm
@@ -22,18 +22,27 @@ import os
 
 import ROOT
 from ROOT import kBird,kBlackBody,kTRUE
-from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, TEnv, gROOT, TLine
+from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, TEnv, gROOT, TLine, TColor
 from ROOT import kAzure, kRed, kBlue, kBlack,kBird, kOrange,kGray
-from ROOT import TGraphErrors,TF1,TColor
+from ROOT import TGraphErrors,TF1,TH1F,TH2F
 
 import rootplotlib as rpl
+
+from pybeamer import *
 
 rpl.set_atlas_style()
 rpl.suppress_root_warnings()
 gROOT.SetBatch(kTRUE)
 
 # allow gpu growth 
-os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+#os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import tensorflow as tf
+
+#import tensorflow as tf
+#tf.config.run_functions_eagerly(True)
+#tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
 
 #
 # Linear correction class table
@@ -43,41 +52,87 @@ class fit_table(Logger):
     #
     # Constructor
     #
-    def __init__(self, generator, etbins, etabins, x_bin_size, y_bin_size, ymin, ymax,
-                 false_alarm_limit=0.5,
-                 level=LoggingLevel.INFO,
-                 xmin_percentage=1,
-                 xmax_percentage=99,
-                 plot_stage='Internal',
-                 palette=kBlackBody,
-                 xmin=None,
-                 xmax=None):
+    def __init__(self, etbins, etabins):
 
         # init base class
-        Logger.__init__(self, level=level)
-        self.__generator = generator
+        Logger.__init__(self)
         self.__etbins = etbins
         self.__etabins = etabins
-        self.__ymin = ymin
-        self.__ymax = ymax
-        self.__x_bin_size = x_bin_size
-        self.__y_bin_size = y_bin_size
-        self.__false_alarm_limit = false_alarm_limit
-        self.__xmin_percentage=xmin_percentage
-        self.__xmax_percentage=xmax_percentage
-        self.__plot_stage=plot_stage
-        self.__xmin=xmin
-        self.__xmax=xmax
-        self.__palette=palette
+    
 
 
     #
     # Fill correction table
     #
-    def fill( self, data_paths,  models, reference_values, output_dir,
-              verbose=False, except_these_bins = [], labels=None ):
+    def fill( self, generator, data_paths,  models, output_file, x_bin_size, y_bin_size, ymin, ymax,
+              verbose=False, 
+              xmin_percentage=1, 
+              xmax_percentage=99, 
+              xmin=None, 
+              xmax=None):
 
-        
+ 
+        store = StoreGate(output_file)
+        bins = list(product(range(len(self.__etbins)-1),range(len(self.__etabins)-1)))
+
+        # Loop over all et/eta bins
+        for et_bin, eta_bin in tqdm( bins , desc= 'Filling... ', ncols=70):
+
+            path = data_paths[et_bin][eta_bin]
+            data, target, avgmu = generator(path)
+
+            model = models[et_bin][eta_bin]
+            # Get the predictions
+            tf.config.run_functions_eagerly(False)
+            outputs = model['model'].predict(data, batch_size=1024, verbose=verbose).flatten()
+
+            # Get all limits using the output
+            xmin = xmin if xmin else int(np.percentile(outputs , xmin_percentage))
+            xmax = xmax if xmax else int(np.percentile(outputs , xmax_percentage))
+
+            MSG_DEBUG(self, 'Setting xmin to %1.2f and xmax to %1.2f', xmin, xmax)
+            xbins = int((xmax-xmin)/x_bin_size)
+
+
+            if type(y_bin_size ) is float:
+                ybins = int((ymax-ymin)/y_bin_size)
+
+                th2_signal = TH2F( 'th2_signal_et%d_eta%d'%(et_bin,eta_bin), '', xbins, xmin, xmax, ybins, ymin, ymax )
+                th2_background = TH2F( 'th2_background_et%d_eta%d'%(et_bin,eta_bin), '', xbins, xmin, xmax, ybins, ymin, ymax )
+            
+            else:
+                y_bins_edges = y_bin_size[et_bin][eta_bin]
+                th2_signal = TH2F( 'th2_signal_et%d_eta%d'%(et_bin,eta_bin), '', xbins, xmin, xmax, 
+                                 len(y_bins_edges)-1, array.array('d', y_bins_edges))
+                th2_background = TH2F( 'th2_background_et%d_eta%d'%(et_bin,eta_bin), '', xbins,xmin, xmax, 
+                                        len(y_bins_edges)-1, array.array('d', y_bins_edges) )
+
+            # fill hists
+            w = array.array( 'd', np.ones_like( outputs[target==1] ) )
+            th2_signal.FillN( len(outputs[target==1]), array.array('d',  outputs[target==1].tolist()),  array.array('d',avgmu[target==1].tolist()), w)
+            
+            w = array.array( 'd', np.ones_like( outputs[target==0] ) )
+            th2_background.FillN( len(outputs[target==0]), array.array('d',outputs[target!=1].tolist()), array.array('d',avgmu[target!=1].tolist()), w)
+            
+            store.addHistogram(th2_signal)
+            store.addHistogram(th2_background)
+
+        store.write()
+
+
+
+
+
+    #
+    # Fill correction table
+    #
+    def calculate( self, input_file, models, reference_values, output_dir, 
+                   except_these_bins = [],
+                   pallete = kBlackBody,
+                   plot_label = 'Internal',
+                   false_alarm_limit = 0.5 ):
+
+        self.__palette = pallete
         # create directory
         localpath = os.getcwd()+'/'+output_dir
         try:
@@ -85,6 +140,8 @@ class fit_table(Logger):
         except:
             MSG_WARNING( self,'The director %s exist.', localpath)
 
+
+        store = restoreStoreGate(input_file)
 
 
         # make template dataframe
@@ -117,46 +174,17 @@ class fit_table(Logger):
           dataframe[key].append(value)
 
         bins = list(product(range(len(self.__etbins)-1),range(len(self.__etabins)-1)))
+
         # Loop over all et/eta bins
         for et_bin, eta_bin in tqdm( bins , desc= 'Fitting... ', ncols=70):
-            path = data_paths[et_bin][eta_bin]
-            data, target, avgmu = self.__generator(path)
+
             references = reference_values[et_bin][eta_bin]
 
             model = models[et_bin][eta_bin]
             model['thresholds'] = {}
-
-            # Get the predictions
-            outputs = model['model'].predict(data, batch_size=1024, verbose=verbose).flatten()
-
-            # Get all limits using the output
-            xmin = self.__xmin if self.__xmin else int(np.percentile(outputs , self.__xmin_percentage))
-            xmax = self.__xmax if self.__xmax else int(np.percentile(outputs, self.__xmax_percentage))
-
-            MSG_DEBUG(self, 'Setting xmin to %1.2f and xmax to %1.2f', xmin, xmax)
-            xbins = int((xmax-xmin)/self.__x_bin_size)
-
-            # Fill 2D histograms
-            from ROOT import TH2F
-            import array
-            if type(self.__y_bin_size ) is float:
-                ybins = int((self.__ymax-self.__ymin)/self.__y_bin_size)
-                th2_signal = TH2F( 'th2_signal_et%d_eta%d'%(et_bin,eta_bin), '', xbins, xmin, xmax, ybins, self.__ymin, self.__ymax )
-                th2_background = TH2F( 'th2_background_et%d_eta%d'%(et_bin,eta_bin), '', xbins,xmin, xmax, ybins, self.__ymin, self.__ymax )
+            th2_signal = store.histogram('th2_signal_et%d_eta%d'%(et_bin,eta_bin))
+            th2_background = store.histogram('th2_background_et%d_eta%d'%(et_bin,eta_bin))
             
-            else:
-                y_bins_edges = self.__y_bin_size[et_bin][eta_bin]
-                th2_signal = TH2F( 'th2_signal_et%d_eta%d'%(et_bin,eta_bin), '', xbins, xmin, xmax, 
-                                 len(y_bins_edges)-1, array.array('d', y_bins_edges))
-                th2_background = TH2F( 'th2_background_et%d_eta%d'%(et_bin,eta_bin), '', xbins,xmin, xmax, 
-                                        len(y_bins_edges)-1, array.array('d', y_bins_edges) )
-
-            # fill hists
-            w = array.array( 'd', np.ones_like( outputs[target==1] ) )
-            th2_signal.FillN( len(outputs[target==1]), array.array('d',  outputs[target==1].tolist()),  array.array('d',avgmu[target==1].tolist()), w)
-            
-            w = array.array( 'd', np.ones_like( outputs[target==0] ) )
-            th2_background.FillN( len(outputs[target==0]), array.array('d',outputs[target!=1].tolist()), array.array('d',avgmu[target!=1].tolist()), w)
 
             MSG_DEBUG( self, 'Applying linear correction to et%d_eta%d bin.', et_bin, eta_bin)
 
@@ -170,16 +198,16 @@ class fit_table(Logger):
                     MSG_INFO(self, 'Add %1.2f %% in reference pd -> new reference pd: %1.2f', ref['pd_epsilon'], add_fac)
 
                 false_alarm = 1.0
-                while false_alarm > self.__false_alarm_limit:
+                while false_alarm > false_alarm_limit:
 
                     # Get the threshold when we not apply any linear correction
                     threshold, _ = self.find_threshold( th2_signal.ProjectionX(), ref_value )
 
                     # Get the efficiency without linear adjustment
-                    #signal_eff, signal_num, signal_den = self.calculate_num_and_den_from_hist(th2_signal, 0.0, threshold)
-                    signal_eff, signal_num, signal_den = self.calculate_num_and_den_from_output(outputs[target==1], avgmu[target==1], 0.0, threshold)
-                    #background_eff, background_num, background_den = self.calculate_num_and_den_from_hist(th2_background, 0.0, threshold)
-                    background_eff, background_num, background_den = self.calculate_num_and_den_from_output(outputs[target!=1], avgmu[target!=1], 0.0, threshold)
+                    signal_eff, signal_num, signal_den = self.calculate_num_and_den_from_hist(th2_signal, 0.0, threshold)
+                    #signal_eff, signal_num, signal_den = self.calculate_num_and_den_from_output(outputs[target==1], avgmu[target==1], 0.0, threshold)
+                    background_eff, background_num, background_den = self.calculate_num_and_den_from_hist(th2_background, 0.0, threshold)
+                    #background_eff, background_num, background_den = self.calculate_num_and_den_from_output(outputs[target!=1], avgmu[target!=1], 0.0, threshold)
 
                     # Apply the linear adjustment and fix it in case of positive slope
                     slope, offset, x_points, y_points, error_points = self.fit( th2_signal, ref_value )
@@ -200,18 +228,13 @@ class fit_table(Logger):
                     slope = slope if apply_fit else 0
                     offset = offset if apply_fit else threshold
 
-
-
-
-
-
                     # Get the efficiency with linear adjustment
-                    #signal_corrected_eff, signal_corrected_num, signal_corrected_den = self.calculate_num_and_den_from_hist(th2_signal, slope, offset)
-                    signal_corrected_eff, signal_corrected_num, signal_corrected_den = self.calculate_num_and_den_from_output(outputs[target==1], \
-                                                                                                                              avgmu[target==1], slope, offset)
-                    #background_corrected_eff, background_corrected_num, background_corrected_den = self.calculate_num_and_den_from_hits(th2_background, slope, offset)
-                    background_corrected_eff, background_corrected_num, background_corrected_den = self.calculate_num_and_den_from_output(outputs[target!=1], \
-                                                                                                                                          avgmu[target!=1], slope, offset)
+                    signal_corrected_eff, signal_corrected_num, signal_corrected_den = self.calculate_num_and_den_from_hist(th2_signal, slope, offset)
+                    #signal_corrected_eff, signal_corrected_num, signal_corrected_den = self.calculate_num_and_den_from_output(outputs[target==1], \
+                    #                                                                                                          avgmu[target==1], slope, offset)
+                    background_corrected_eff, background_corrected_num, background_corrected_den = self.calculate_num_and_den_from_hist(th2_background, slope, offset)
+                    #background_corrected_eff, background_corrected_num, background_corrected_den = self.calculate_num_and_den_from_output(outputs[target!=1], \
+                    #                                                                                                                      avgmu[target!=1], slope, offset)
 
                     false_alarm = background_corrected_num/background_corrected_den # get the passed/total
 
@@ -236,7 +259,7 @@ class fit_table(Logger):
                 # Plot histograms
                 #
 
-                label = self.__plot_stage + ', #it{%s}'%ref['label']
+                label = plot_label + ', #it{%s}'%ref['label']
                 info = models[et_bin][eta_bin]['thresholds'][name]
 
                 outname = localpath+'/th2_signal_%s_et%d_eta%d.pdf'%(name,et_bin,eta_bin)
@@ -635,23 +658,7 @@ class fit_table(Logger):
           numerator+=num
           denominator+=xproj.Integral(-1, xproj.GetNbinsX()+1)
 
-      # Calculate the efficiency histogram
-      th1_den = th2.ProjectionY(th2.GetName()+'_proj'+str(time.time()),1,1)
-      th1_eff = th1_num.Clone()
-      th1_eff.Divide(th1_den)
-      # Fix the error bar
-      for bx in range(th1_eff.GetNbinsX()):
-          if th1_den.GetBinContent(bx+1) != 0 :
-              eff = th1_eff.GetBinContent(bx+1)
-              try:
-                  error = np.sqrt(eff*(1-eff)/th1_den.GetBinContent(bx+1))
-              except:
-                  error=0
-              th1_eff.SetBinError(bx+1,eff)
-          else:
-              th1_eff.SetBinError(bx+1,0)
-
-      return th1_eff, numerator, denominator
+      return numerator/denominator, numerator, denominator
 
 
     def calculate_num_and_den_from_output(self, output, avgmu, slope, offset) :
