@@ -24,6 +24,6 @@ from tensorflow.keras.models import model_from_json
 model = model_from_json( open( args.json_file ).read() )
 model.load_weights( args.h5_file )
 onnx_model = keras2onnx.convert_keras(model)
-print('Saving ONNX file as '+ args.output_file)
+#print('Saving ONNX file as '+ args.output_file)
 onnx.save_model( onnx_model, args.output_file )
 
