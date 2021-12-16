@@ -5,8 +5,11 @@ __all__ = ['crossval_table']
 from Gaugi.macros import *
 from Gaugi import Logger, expand_folders, load, progressbar
 from pybeamer import *
-
+from pprint import pprint
 from functools import reduce
+from itertools import product
+from tqdm import tqdm
+
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import collections, os, glob, json, copy, re
@@ -98,17 +101,15 @@ class crossval_table( Logger ):
                               'init'           : [],
                               'file_name'      : [],
                               'tuned_idx'      : [],
+                              'op_name'        : [],
                           })
 
-
-        # Complete the dataframe for each varname in the config dict
-        for varname in self.__config_dict.keys():
-            dataframe[varname] = []
-
-        #MSG_INFO(self, 'There are %i files for this task...' %(len(paths)))
-        #MSG_INFO(self, 'Filling the table... ')
+        MSG_INFO(self, 'There are %i files for this task...' %(len(paths)))
+        MSG_INFO(self, 'Filling the table... ')
 
         for ituned_file_name in progressbar( paths , 'Reading %s...'%tag):
+            #for ituned_file_name in paths:
+
             try:
                 gfile = load(ituned_file_name)
             except:
@@ -117,24 +118,28 @@ class crossval_table( Logger ):
             tuned_file = gfile['tunedData']
 
             for idx, ituned in enumerate(tuned_file):
+
                 history = ituned['history']
-                #model = model_from_json( json.dumps(ituned['sequence'], separators=(',', ':')) , custom_objects={'RpLayer':RpLayer} )
-                #model.set_weights( ituned['weights'] )
+                
+                for op, config_dict in self.__config_dict.items():
 
-                # get the basic from model
-                dataframe['train_tag'].append(tag)
-                #dataframe['model'].append(model)
-                dataframe['model_idx'].append(ituned['imodel'])
-                dataframe['sort'].append(ituned['sort'])
-                dataframe['init'].append(ituned['init'])
-                dataframe['et_bin'].append(self.get_etbin(ituned_file_name))
-                dataframe['eta_bin'].append(self.get_etabin(ituned_file_name))
-                dataframe['file_name'].append(ituned_file_name)
-                dataframe['tuned_idx'].append( idx )
+                    # get the basic from model
+                    dataframe['train_tag'].append(tag)
+                    dataframe['model_idx'].append(ituned['imodel'])
+                    dataframe['sort'].append(ituned['sort'])
+                    dataframe['init'].append(ituned['init'])
+                    dataframe['et_bin'].append(self.get_etbin(ituned_file_name))
+                    dataframe['eta_bin'].append(self.get_etabin(ituned_file_name))
+                    dataframe['file_name'].append(ituned_file_name)
+                    dataframe['tuned_idx'].append( idx )
+                    dataframe['op_name'].append(op)
 
-                # Get the value for each wanted key passed by the user in the contructor args.
-                for key, local  in self.__config_dict.items():
-                    dataframe[key].append( self.__get_value( history, local ) )
+                    # Get the value for each wanted key passed by the user in the contructor args.
+                    for key, local  in config_dict.items():
+                        if not key in dataframe.keys():
+                            dataframe[key] = [self.__get_value( history, local )]
+                        else:
+                            dataframe[key].append( self.__get_value( history, local ) )
 
         # append tables if is need
         # ignoring index to avoid duplicated entries in dataframe
@@ -248,7 +253,7 @@ class crossval_table( Logger ):
     #
     # Return only best inits
     #
-    def filter_inits(self, key):
+    def filter_inits(self, key, idxmin=False):
         '''
         This method will filter the Dataframe based on given key in order to get the best inits for every sort.
 
@@ -256,18 +261,18 @@ class crossval_table( Logger ):
 
         - key: the column to be used for filter.
         '''
-        if self.table().train_tag.nunique() > 1:
-            idxmask = self.table().groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx', 'sort'])[key].idxmax().values
+        if idxmin:
+            idxmask = self.table().groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx', 'sort', 'op_name'])[key].idxmin().values
             return self.table().loc[idxmask]
         else:
-            idxmask = self.table().groupby(['et_bin', 'eta_bin', 'model_idx', 'sort'])[key].idxmax().values
+            idxmask = self.table().groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx', 'sort', 'op_name'])[key].idxmax().values
             return self.table().loc[idxmask]
 
 
     #
     # Get the best sorts from best inits table
     #
-    def filter_sorts(self, best_inits, key):
+    def filter_sorts(self, best_inits, key, idxmin=False):
         '''
         This method will filter the Dataframe based on given key in order to get the best model for every configuration.
 
@@ -275,18 +280,18 @@ class crossval_table( Logger ):
 
         - key: the column to be used for filter.
         '''
-        if self.table().train_tag.nunique() > 1:
-            idxmask = best_inits.groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx'])[key].idxmax().values
+        if idxmin:
+            idxmask = best_inits.groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx', 'op_name'])[key].idxmin().values
             return best_inits.loc[idxmask]
         else:
-            idxmask = best_inits.groupby(['et_bin', 'eta_bin', 'model_idx'])[key].idxmax().values
+            idxmask = best_inits.groupby(['et_bin', 'eta_bin', 'train_tag', 'model_idx', 'op_name'])[key].idxmax().values
             return best_inits.loc[idxmask]
 
 
     #
     # Calculate the mean/std table from best inits table
     #
-    def describe(self, best_inits ):
+    def describe(cls, best_inits ):
         '''
         This method will give the mean and std for construct the beamer presentation for each train tag.
 
@@ -295,30 +300,44 @@ class crossval_table( Logger ):
         - best_inits:
         '''
         # Create a new dataframe to hold this table
-        dataframe = { 'train_tag' : [], 'et_bin' : [], 'eta_bin' : []}
+        dataframe = { 'train_tag' : [], 'et_bin' : [], 'eta_bin' : [], 'op_name':[],
+                      'pd_ref':[], 'fa_ref':[], 'sp_ref':[]}
         # Include all wanted keys into the dataframe
-        for key in self.__config_dict.keys():
-            if 'passed' in key: # Skip counts
+        for key in best_inits.columns.values:
+            if key in ['train_tag', 'et_bin', 'eta_bin', 'op_name']:
+                continue
+            elif 'passed' in key or 'total' in key:
                 continue
             elif ('op' in key) or ('val' in key):
                 dataframe[key+'_mean'] = []; dataframe[key+'_std'] = []
             else:
-                dataframe[key] = []
+                continue
 
         # Loop over all tuning tags and et/eta bins
         for tag in best_inits.train_tag.unique():
             for et_bin in best_inits.et_bin.unique():
                 for eta_bin in best_inits.eta_bin.unique():
+                    for op in best_inits.op_name.unique():
 
-                  cv_bin = best_inits.loc[ (best_inits.train_tag == tag) & (best_inits.et_bin == et_bin) & (best_inits.eta_bin == eta_bin) ]
-                  dataframe['train_tag'].append( tag ); dataframe['et_bin'].append( et_bin ); dataframe['eta_bin'].append( eta_bin )
-                  for key in self.__config_dict.keys():
-                      if 'passed' in key:
-                        continue
-                      elif ('op' in key) or ('val' in key):
-                          dataframe[key+'_mean'].append( cv_bin[key].mean() ); dataframe[key+'_std'].append( cv_bin[key].std() )
-                      else:
-                          dataframe[key].append( cv_bin[key].unique()[0] )
+                        cv_bin = best_inits.loc[ (best_inits.train_tag == tag) & (best_inits.et_bin == et_bin) & (best_inits.eta_bin == eta_bin) & (best_inits.op_name == op)]
+                        dataframe['train_tag'].append( tag )
+                        dataframe['et_bin'].append( et_bin )
+                        dataframe['eta_bin'].append( eta_bin )
+                        dataframe['op_name'].append(op)
+                        dataframe['pd_ref'].append(cv_bin.pd_ref.values[0])
+                        dataframe['fa_ref'].append(cv_bin.fa_ref.values[0])
+                        dataframe['sp_ref'].append(cv_bin.sp_ref.values[0])
+
+                        for key in best_inits.columns.values:
+                            if key in ['train_tag', 'et_bin', 'eta_bin', 'op_name']:
+                                continue # skip common
+                            elif 'passed' in key or 'total' in key:
+                                continue # skip counts
+                            elif ('op' in key) or ('val' in key):
+                                dataframe[key+'_mean'].append( cv_bin[key].mean() ); dataframe[key+'_std'].append( cv_bin[key].std() )
+                            else: # skip others
+                                continue
+
 
         # Return the pandas dataframe
         return pd.DataFrame(dataframe)
@@ -337,8 +356,9 @@ class crossval_table( Logger ):
         - best_inits: a pandas Dataframe which contains all information for the best inits.
         - tag: the training tag that will be integrate.
         '''
-        keys = [ key for key in self.__config_dict.keys() if 'passed' in key or 'total' in key]
+        keys = [ key for key in best_inits.columns.values if 'passed' in key or 'total' in key]
         table = best_inits.loc[best_inits.train_tag==tag].groupby(['sort']).agg(dict(zip( keys, ['sum']*len(keys))))
+
         for key in keys:
             if 'passed' in key:
                 orig_key = key.replace('_passed','')
@@ -346,8 +366,54 @@ class crossval_table( Logger ):
                 table[orig_key] = values
                 table=table.drop([key],axis=1)
                 table=table.drop([orig_key+'_total'],axis=1)
-
         return table.agg(['mean','std'])
+
+
+    def evaluate( self, best_sorts, paths , data_generator, dec_generator ):
+
+        tf.config.run_functions_eagerly(False)
+
+        columns = best_sorts.columns.values.tolist()
+        extra = ['pd_test', 'fa_test', 'sp_test', 'pd_test_passed', 'pd_test_total', 'fa_test_passed', 'fa_test_total']
+        columns.extend(extra)
+        table = collections.OrderedDict({ key:[] for key in columns} )
+
+        bins = list(product(range(len(self.__etbins)-1),range(len(self.__etabins)-1)))
+
+        # Loop over all et/eta bins
+        for et_bin, eta_bin in tqdm( bins , desc= 'Fitting... ', ncols=70):
+
+                data = data_generator(paths[et_bin][eta_bin])
+
+                for train_tag in best_sorts.train_tag.unique():
+
+
+                    rows = best_sorts.loc[(best_sorts.et_bin==et_bin) & (best_sorts.eta_bin==eta_bin) & (best_sorts.train_tag==train_tag) ] 
+                    
+                    for op_name in rows.op_name.unique():
+
+                        row = rows.loc[rows.op_name==op_name]
+                        data['dec'] = dec_generator( row, data )
+
+                        pd_test_passed = data.loc[(data.target==1) & (data.dec==True)].shape[0]
+                        pd_test_total = data.loc[(data.target==1)].shape[0]
+                        pd_test = pd_test_passed/pd_test_total
+
+                        fa_test_passed = data.loc[(data.target!=1) & (data.dec==True)].shape[0]
+                        fa_test_total = data.loc[(data.target!=1)].shape[0]
+                        fa_test = fa_test_passed/fa_test_total
+
+                        sp_test = np.sqrt(  np.sqrt(pd_test*(1-fa_test)) * (0.5*(pd_test+(1-fa_test)))  )
+
+                        for col in columns:
+                            if col in extra:
+                                continue
+                            table[col].append( getattr(row, col).values[0] )
+                        
+                        for col in extra:
+                            table[col].append(eval(col))
+
+        return pd.DataFrame(table)
 
 
 
@@ -370,7 +436,7 @@ class crossval_table( Logger ):
             if row.train_tag != tag:
               continue
             # Load history
-            history = load( row.file_name )['tunedData'][row.tuned_idx]['history']
+            history = self.get_history(row.file_name, row.tuned_idx)
             history['loc'] = {'et_bin' : row.et_bin, 'eta_bin' : row.eta_bin, 'sort' : row.sort, 'model_idx' : row.model_idx}
             name = 'history_et_%i_eta_%i_model_%i_sort_%i.json' % (row.et_bin,row.eta_bin,row.model_idx,row.sort)
             jbl_name = 'history_et_%i_eta_%i_model_%i_sort_%i.joblib' % (row.et_bin,row.eta_bin,row.model_idx,row.sort)
@@ -382,11 +448,11 @@ class crossval_table( Logger ):
 
 
 
-    def get_model( self, path, index ):
+    def get_history( self, path, index ):
       tuned_list = load(path)['tunedData']
       for tuned in tuned_list:
         if tuned['imodel'] == index:
-          return tuned
+          return tuned['history']
       MSG_FATAL( self, "It's not possible to find the history for model index %d", index )
 
 
@@ -418,7 +484,7 @@ class crossval_table( Logger ):
             for idx, sort in enumerate(table.sort.unique()):
                 current_table = table.loc[table.sort==sort]
                 path=current_table.file_name.values[0]
-                history = self.get_model( path, current_table.model_idx.values[0])['history']
+                history = self.get_history( path, current_table.model_idx.values[0])
                 
                 best_epoch = history['max_sp_best_epoch_val'][-1] - start_epoch
                 # Make the plot here
@@ -442,21 +508,18 @@ class crossval_table( Logger ):
             else:
                 plt.close(fig)
 
-        for itag in best_inits.train_tag.unique():
-
-            tag = itag
-            m_best_inits = best_inits.loc[(best_inits.train_tag==tag)]
-            for et_bin in m_best_inits.et_bin.unique():
-                for eta_bin in m_best_inits.eta_bin.unique():
+        for tag in best_inits.train_tag.unique():
+            for et_bin in best_inits.et_bin.unique():
+                for eta_bin in best_inits.eta_bin.unique():
                     best_sort = best_sorts.loc[(best_sorts.et_bin==et_bin) & (best_sorts.eta_bin==eta_bin) & (best_sorts.train_tag==tag)].sort 
-                    plot_training_curves_for_each_sort(m_best_inits, et_bin, eta_bin, best_sort.values[0],
+                    plot_training_curves_for_each_sort(best_inits.loc[best_inits.train_tag==tag], et_bin, eta_bin, best_sort.values[0],
                         basepath+'/'+dirname+'/train_evolution_et%d_eta%d_%s.pdf'%(et_bin,eta_bin,tag), display, start_epoch)
 
 
 
-		#
-		# Plot the training curves for all sorts.
-		#
+    #
+    # Plot the training curves for all sorts.
+    #
     def plot_roc_curves( self, best_sorts, tags, legends, output, display=False, colors=None, points=None, et_bin=None, eta_bin=None,
                          xmin=-0.02, xmax=0.3, ymin=0.8, ymax=1.02, fontsize=18, figsize=(15,15)):
         '''
@@ -491,7 +554,7 @@ class crossval_table( Logger ):
               current_table = table.loc[(table.train_tag==tag)]
 
               path=current_table.file_name.values[0]
-              history = self.get_model( path, current_table.model_idx.values[0])['history']
+              history = self.get_history( path, current_table.model_idx.values[0])
               pd, fa = history['summary']['rocs']['roc_op']
               ax.plot( fa, pd, color=colors[idx], linewidth=2, label=tag)
               ax.set_ylim(ymin,ymax)
@@ -537,13 +600,13 @@ class crossval_table( Logger ):
     #
     # Create the beamer table file
     #
-    def dump_beamer_table( self, best_inits, operation_points, output, tags=None, title='' ):
+    def dump_beamer_table( self, best_inits, output, tags=None, title='' , test_table=None):
         '''
         This method will use a pandas Dataframe in order to create a beamer presentation which summary the tuning cross-validation.
 
         Arguments:
         - best_inits: a pandas Dataframe which contains all information for the best inits.
-        - operation_points: the operation point that will be used.
+        - operation_poins: the operation point that will be used.
         - output: a name for the pdf
         - tags: the training tag that will be used. If None then the tags will be get from the Dataframe.
         - title: the pdf title
@@ -579,7 +642,6 @@ class crossval_table( Logger ):
                                  , outputFile = output
                                  , font = 'structurebold' ):
 
-            for operation_point in operation_points:
                 ### Prepare tables
                 tuning_names = ['']; tuning_names.extend( train_tags )
                 lines1 = []
@@ -591,31 +653,46 @@ class crossval_table( Logger ):
                                       for _ in etbins_str]), _contextManaged = False ) ]
                 lines1 += [ HLine(_contextManaged = False) ]
 
-                for etaBinIdx in range(len(self.__etabins) - 1):
+                for etaBinIdx in cv_table.eta_bin.unique():
                     for idx, tag in enumerate( train_tags ):
-                        cv_values=[]; ref_values=[]
-                        for etBinIdx in range(len(self.__etbins) - 1):
+                        cv_values=[]; ref_values=[]; test_values=[]
+                        for etBinIdx in cv_table.et_bin.unique():
                             current_table = cv_table.loc[ (cv_table.train_tag==tag) & (cv_table.et_bin==etBinIdx) & (cv_table.eta_bin==etaBinIdx) ]
-
-                            sp = current_table[operation_point+'_sp_val_mean'].values[0]*100
-                            pd = current_table[operation_point+'_pd_val_mean'].values[0]*100
-                            fa = current_table[operation_point+'_fa_val_mean'].values[0]*100
-                            sp_std = current_table[operation_point+'_sp_val_std'].values[0]*100
-                            pd_std = current_table[operation_point+'_pd_val_std'].values[0]*100
-                            fa_std = current_table[operation_point+'_fa_val_std'].values[0]*100
-                            sp_ref = current_table[operation_point+'_sp_ref'].values[0]*100
-                            pd_ref = current_table[operation_point+'_pd_ref'].values[0]*100
-                            fa_ref = current_table[operation_point+'_fa_ref'].values[0]*100
+                            sp = current_table['sp_val_mean'].values[0]*100
+                            pd = current_table['pd_val_mean'].values[0]*100
+                            fa = current_table['fa_val_mean'].values[0]*100
+                            sp_std = current_table['sp_val_std'].values[0]*100
+                            pd_std = current_table['pd_val_std'].values[0]*100
+                            fa_std = current_table['fa_val_std'].values[0]*100
+                            sp_ref = current_table['sp_ref'].values[0]*100
+                            pd_ref = current_table['pd_ref'].values[0]*100
+                            fa_ref = current_table['fa_ref'].values[0]*100
 
                             cv_values   += [ colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorSP+('%1.2f$\pm$%1.2f')%(sp,sp_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std),    ]
                             ref_values  += [ colorPD+('%1.2f')%(pd_ref), colorSP+('%1.2f')%(sp_ref), colorPF+('%1.2f')%(fa_ref)]
+                            
+                            if test_table is not None:
+                                current_test_table = test_table.loc[ (test_table.train_tag==tag) & (test_table.et_bin==etBinIdx) & (test_table.eta_bin==etaBinIdx) ]
+                                pd = current_test_table['pd_test'].values[0]*100
+                                sp = current_test_table['sp_test'].values[0]*100
+                                fa = current_test_table['fa_test'].values[0]*100
+                                test_values   += [ colorPD+('%1.2f')%(pd),colorSP+('%1.2f')%(sp),colorPF+('%1.2f')%(fa)    ]
+
                         if idx > 0:
-                            lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Cross Validation'] + cv_values   , _contextManaged = False ) ]
+                            lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Cross Val.'] + cv_values   , _contextManaged = False ) ]
+                        
+                        
+                            if test_table is not None:
+                                lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Test'] + test_values   , _contextManaged = False ) ]
+                    
+                        
                         else:
                             lines1 += [ TableLine( columns = ['\multirow{%d}{*}{'%(len(tuning_names))+etabins_str[etaBinIdx]+'}',tuning_names[idx], 'Reference'] + ref_values   ,
                                                 _contextManaged = False ) ]
-                            lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Cross Validation'] + cv_values    , _contextManaged = False ) ]
-
+                            lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Cross Val.'] + cv_values    , _contextManaged = False ) ]
+                            if test_table is not None:
+                                lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Test'] + test_values   , _contextManaged = False ) ]
+                    
                     lines1 += [ HLine(_contextManaged = False) ]
                 lines1 += [ HLine(_contextManaged = False) ]
 
@@ -628,20 +705,36 @@ class crossval_table( Logger ):
                 lines2 += [ HLine(_contextManaged = False) ]
                 for idx, tag in enumerate( train_tags ):
                     current_table = self.integrate( best_inits, tag )
-                    pd = current_table[operation_point+'_pd_op'].values[0]*100
-                    pd_std = current_table[operation_point+'_pd_op'].values[1]*100
-                    fa = current_table[operation_point+'_fa_op'].values[0]*100
-                    fa_std = current_table[operation_point+'_fa_op'].values[1]*100
-                    pd_ref = current_table[operation_point+'_pd_ref'].values[0]*100
-                    fa_ref = current_table[operation_point+'_fa_ref'].values[0]*100
-                    if idx > 0:
-                        lines2 += [ TableLine( columns = [tag.replace('_','\_') ,
-                          colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std) ], _contextManaged = False ) ]
-                    else:
-                      lines2 += [ TableLine( columns = ['Ref.' ,colorPD+('%1.2f')%(pd_ref),colorPF+('%1.2f')%(fa_ref) ], _contextManaged = False ) ]
-                      lines2 += [ TableLine( columns = [tag.replace('_','\_') ,
-                        colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std) ], _contextManaged = False ) ]
+                    pd = current_table['pd_val'].values[0]*100
+                    pd_std = current_table['pd_val'].values[1]*100
+                    fa = current_table['fa_val'].values[0]*100
+                    fa_std = current_table['fa_val'].values[1]*100
 
+                    pd_ref = current_table['pd_ref'].values[0]*100
+                    fa_ref = current_table['fa_ref'].values[0]*100
+
+                    if test_table is not None:
+                        keys = [ key for key in test_table.columns.values if 'passed' in key or 'total' in key]
+                        current_test_table = test_table.loc[test_table.train_tag=='v8'].agg(dict(zip( keys, ['sum']*len(keys))))
+                        test_pd = (current_test_table['pd_test_passed']/current_test_table['pd_test_total'])*100
+                        test_fa = (current_test_table['fa_test_passed']/current_test_table['fa_test_total'])*100
+
+                    if idx > 0:
+                        lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (Cross Val.)' ,
+                          colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std) ], _contextManaged = False ) ]
+                    
+                        if test_table is not None:
+                            lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (Test)',
+                            colorPD+('%1.2f')%(test_pd),colorPF+('%1.2f')%(test_fa) ], _contextManaged = False ) ]
+                    
+                    else:
+                        lines2 += [ TableLine( columns = ['Ref.' ,colorPD+('%1.2f')%(pd_ref),colorPF+('%1.2f')%(fa_ref) ], _contextManaged = False ) ]
+                        lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (Cross Val.)',
+                                    colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std) ], _contextManaged = False ) ]
+                        if test_table is not None:
+                            lines2 += [ TableLine( columns = [tag.replace('_','\_')+ ' (Test)' ,
+                            colorPD+('%1.2f')%(test_pd),colorPF+('%1.2f')%(test_fa) ], _contextManaged = False ) ]
+                    
 
                 # Create all tables into the PDF Latex
                 with BeamerSlide( title = "The Cross Validation Efficiency Values For All Tunings"  ):
@@ -668,13 +761,10 @@ class crossval_table( Logger ):
 
 
 
-
-
-
     #
     # Load all keras models given the best sort table
     #
-    def get_best_models( self, best_sorts , remove_last=True, with_history=False):
+    def get_best_models( self, best_sorts , remove_last=True, with_history=True):
         '''
         This method will load the best models.
 
@@ -692,7 +782,7 @@ class crossval_table( Logger ):
             for eta_bin in range(len(self.__etabins)-1):
                 d_tuned = {}
                 best = best_sorts.loc[(best_sorts.et_bin==et_bin) & (best_sorts.eta_bin==eta_bin)]
-                tuned = load(best.file_name.values[0])['tunedData'][best.model_idx.values[0]]
+                tuned = load(best.file_name.values[0])['tunedData'][best.tuned_idx.values[0]]
                 model = model_from_json( json.dumps(tuned['sequence'], separators=(',', ':')) ) #custom_objects={'RpLayer':RpLayer} )
                 model.set_weights( tuned['weights'] )
                 new_model = Model(model.inputs, model.layers[-2].output) if remove_last else model
@@ -702,7 +792,12 @@ class crossval_table( Logger ):
                 d_tuned['etaBin']   = [self.__etabins[eta_bin], self.__etabins[eta_bin+1]]
                 d_tuned['etBinIdx'] = et_bin
                 d_tuned['etaBinIdx']= eta_bin
-                d_tuned['history']  = tuned['history']
+                d_tuned['sort']     = best.sort.values[0]
+                d_tuned['init']     = best.init.values[0]
+                d_tuned['model_idx']= best.model_idx.values[0]
+                d_tuned['file_name']= best.file_name.values[0]
+                if with_history:
+                    d_tuned['history']  = tuned['history']
                 models[et_bin][eta_bin] = d_tuned
         return models
 
@@ -710,80 +805,44 @@ class crossval_table( Logger ):
 
 
 
-
-
-if __name__ == "__main__":
-
-
     #
-    # My local test to debug the cross validation table class
+    # Load all keras models given the best sort table
     #
+    def get_best_init_models( self, best_inits , remove_last=True, with_history=True):
+        '''
+        This method will load the best init models.
 
-    def create_op_dict(op):
-        d = {
-                  op+'_pd_ref'    : "reference/"+op+"_cutbased/pd_ref#0",
-                  op+'_fa_ref'    : "reference/"+op+"_cutbased/fa_ref#0",
-                  op+'_sp_ref'    : "reference/"+op+"_cutbased/sp_ref",
-                  op+'_pd_val'    : "reference/"+op+"_cutbased/pd_val#0",
-                  op+'_fa_val'    : "reference/"+op+"_cutbased/fa_val#0",
-                  op+'_sp_val'    : "reference/"+op+"_cutbased/sp_val",
-                  op+'_pd_op'     : "reference/"+op+"_cutbased/pd_op#0",
-                  op+'_fa_op'     : "reference/"+op+"_cutbased/fa_op#0",
-                  op+'_sp_op'     : "reference/"+op+"_cutbased/sp_op",
+        Arguments:
 
-                  # Counts
-                  op+'_pd_ref_passed'    : "reference/"+op+"_cutbased/pd_ref#1",
-                  op+'_fa_ref_passed'    : "reference/"+op+"_cutbased/fa_ref#1",
-                  op+'_pd_ref_total'     : "reference/"+op+"_cutbased/pd_ref#2",
-                  op+'_fa_ref_total'     : "reference/"+op+"_cutbased/fa_ref#2",
-                  op+'_pd_val_passed'    : "reference/"+op+"_cutbased/pd_val#1",
-                  op+'_fa_val_passed'    : "reference/"+op+"_cutbased/fa_val#1",
-                  op+'_pd_val_total'     : "reference/"+op+"_cutbased/pd_val#2",
-                  op+'_fa_val_total'     : "reference/"+op+"_cutbased/fa_val#2",
-                  op+'_pd_op_passed'     : "reference/"+op+"_cutbased/pd_op#1",
-                  op+'_fa_op_passed'     : "reference/"+op+"_cutbased/fa_op#1",
-                  op+'_pd_op_total'      : "reference/"+op+"_cutbased/pd_op#2",
-                  op+'_fa_op_total'      : "reference/"+op+"_cutbased/fa_op#2",
-        }
-        return d
+        - best_inits: the table that contains the best_inits;
+        - remove_last: a bolean variable to remove or not the tanh in tha output layer;
+        - with_history: unused variable.
+        '''
+        from tensorflow.keras.models import Model, model_from_json
+        import json
 
+        models = [[ [] for _ in range(len(self.__etabins)-1)] for __ in range(len(self.__etbins)-1)]
 
-    tuned_info = collections.OrderedDict( {
-                  # validation
-                  "max_sp_val"      : 'summary/max_sp_val',
-                  "max_sp_pd_val"   : 'summary/max_sp_pd_val#0',
-                  "max_sp_fa_val"   : 'summary/max_sp_fa_val#0',
-                  # Operation
-                  "max_sp_op"       : 'summary/max_sp_op',
-                  "max_sp_pd_op"    : 'summary/max_sp_pd_op#0',
-                  "max_sp_fa_op"    : 'summary/max_sp_fa_op#0',
-                  #"loss"            : 'loss',
-                  #"val_loss"        : 'val_loss',
-                  #"accuracy"        : 'accuracy',
-                  #"val_accuracy"    : 'val_accuracy',
-                  #"max_sp_best_epoch_val": 'max_sp_best_epoch_val',
-                  } )
-
-    tuned_info.update(create_op_dict('tight'))
-    tuned_info.update(create_op_dict('medium'))
-    tuned_info.update(create_op_dict('loose'))
-    tuned_info.update(create_op_dict('vloose'))
-
-
-    etbins = [15,20,30,40,50,100000]
-    etabins = [0, 0.8 , 1.37, 1.54, 2.37, 2.5]
-
-    cv  = crossval_table( tuned_info, etbins = etbins , etabins = etabins )
-
-    #cv.fill( '/Volumes/castor/tuning_data/Zee/v10/*.r2/*/*.gz', 'v10')
-    #cv.to_csv( 'v10.csv' )
-    path = '/home/jodafons/git_repos/ringer/jodafons_analysis/2021/tunings_v7_to_v2_el_analysis/output/table_v8.csv'
-    cv.from_csv( path )
-    best_inits = cv.filter_inits("max_sp_val")
-    best_inits = best_inits.loc[(best_inits.model_idx==0)]
-    best_sorts = cv.filter_sorts(best_inits, 'max_sp_val')
-
-    cv.dump_beamer_table( best_inits, ['vloose'], 'test', tags=['v8'], title='' )
-    #cv.plot_training_curves( best_inits, best_sorts, 'v11' )
-
-
+        for et_bin in range(len(self.__etabins)-1):
+            for eta_bin in range(len(self.__etabins)-1):
+                for sort in best_inits.sort.unique():
+                    d_tuned = {}
+                    best = best_inits.loc[(best_inits.et_bin==et_bin) & (best_inits.eta_bin==eta_bin) & (best_inits.sort==sort)]
+                    tuned = load(best.file_name.values[0])['tunedData'][best.tuned_idx.values[0]]
+                    model = model_from_json( json.dumps(tuned['sequence'], separators=(',', ':')) ) #custom_objects={'RpLayer':RpLayer} )
+                    model.set_weights( tuned['weights'] )
+                    new_model = Model(model.inputs, model.layers[-2].output) if remove_last else model
+                    #new_model.summary()
+                    d_tuned['model']    = new_model
+                    d_tuned['etBin']    = [self.__etbins[et_bin], self.__etbins[et_bin+1]]
+                    d_tuned['etaBin']   = [self.__etabins[eta_bin], self.__etabins[eta_bin+1]]
+                    d_tuned['etBinIdx'] = et_bin
+                    d_tuned['etaBinIdx']= eta_bin
+                    d_tuned['sort']     = best.sort.values[0]
+                    d_tuned['init']     = best.init.values[0]
+                    d_tuned['model_idx']= best.model_idx.values[0]
+                    d_tuned['file_name']= best.file_name.values[0]
+                    if with_history:
+                        d_tuned['history']  = tuned['history']
+                    models[et_bin][eta_bin].append(d_tuned)
+        return models

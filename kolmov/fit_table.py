@@ -7,17 +7,20 @@ __all__ = ['fit_table']
 
 from Gaugi import Logger, LoggingLevel, StoreGate, restoreStoreGate
 from Gaugi.macros import *
+from Gaugi import load as gload
 
 from tqdm import tqdm
 from copy import copy
 from itertools import product
 
 import numpy as np
-import pandas
+import pandas as pd
 import time
 import array
+import json
 import collections
 import os
+import rootplotlib as rpl
 
 
 import ROOT
@@ -26,9 +29,10 @@ from ROOT import TCanvas, gStyle, TLegend, gPad, TLatex, TEnv, gROOT, TLine, TCo
 from ROOT import kAzure, kRed, kBlue, kBlack,kBird, kOrange,kGray
 from ROOT import TGraphErrors,TF1,TH1F,TH2F
 
-import rootplotlib as rpl
 
 from pybeamer import *
+from tensorflow.keras.models import Model, model_from_json
+
 
 rpl.set_atlas_style()
 rpl.suppress_root_warnings()
@@ -238,7 +242,7 @@ class fit_table(Logger):
 
                     false_alarm = background_corrected_num/background_corrected_den # get the passed/total
 
-                    if false_alarm > self.__false_alarm_limit:
+                    if false_alarm > false_alarm_limit:
                         # Reduce the reference value by hand
                         ref_value-=0.0025
 
@@ -276,8 +280,6 @@ class fit_table(Logger):
 
                 model['thresholds'][name]['figures'] = paths
 
-
-
                 # et/eta bin information
                 add( 'name'                        , name )
                 add( 'et_bin'                      , et_bin  )
@@ -305,7 +307,7 @@ class fit_table(Logger):
                 add( 'background_corrected_eff'    , background_corrected_num/background_corrected_den )
 
         # convert to pandas dataframe
-        self.__table = pandas.DataFrame( dataframe )
+        self.__table = pd.DataFrame( dataframe )
         return self.__table
 
     #
@@ -318,7 +320,9 @@ class fit_table(Logger):
     #
     # Dump bearmer report
     #
-    def dump_beamer_table( self, table, models, title, output_pdf ):
+    def dump_beamer_table( self, table, models, title, op_name, output_pdf ):
+
+        name = op_name
 
         # Slide maker
         with BeamerTexReportTemplate1( theme = 'Berlin'
@@ -342,159 +346,125 @@ class fit_table(Logger):
                 etabins_str.append( r'$%.2f<\eta<%.2f$'%etabin )
 
 
-            for name in table.name.unique():
-
-                with BeamerSection( name = name.replace('_','\_') ):
-
-                    # prepare figures
-                    with BeamerSubSection( name = 'Correction plots for each phase space'):
-
-                        for etBinIdx in range( len(self.__etbins)-1 ):
-
-                            for etaBinIdx in range( len(self.__etabins)-1 ):
-
-                                current_table = table.loc[ (table.name==name) & (table.et_bin==etBinIdx) & (table.eta_bin==etaBinIdx)]
-
-                                # prepate 2D histograms
-                                paths = models[etBinIdx][etaBinIdx]['thresholds'][name]['figures']
-
-                                title = 'Energy between %s in %s (et%d\_eta%d)'%(etbins_str[etBinIdx],
-                                                                                 etabins_str[etaBinIdx],
-                                                                                 etBinIdx,etaBinIdx)
-
-                                BeamerMultiFigureSlide( title = title
-                                , paths = paths
-                                , nDivWidth = 2 # x
-                                , nDivHeight = 1 # y
-                                , texts=None
-                                , fortran = False
-                                , usedHeight = 0.6
-                                , usedWidth = 1.
-                                )
-
-
-
-
-
-                    # prepate table
-                    with BeamerSubSection( name = 'Efficiency Values' ):
-
-                        # Prepare phase space table
-                        lines1 = []
+            with BeamerSection( name = name.replace('_','\_') ):
+                # prepare figures
+                with BeamerSubSection( name = 'Correction plots for each phase space'):
+                    for etBinIdx in range( len(self.__etbins)-1 ):
+                        for etaBinIdx in range( len(self.__etabins)-1 ):
+                            current_table = table.loc[ (table.name==name) & (table.et_bin==etBinIdx) & (table.eta_bin==etaBinIdx)]
+                            # prepate 2D histograms
+                            paths = models[etBinIdx][etaBinIdx]['thresholds'][name]['figures']
+                            title = 'Energy between %s in %s (et%d\_eta%d)'%(etbins_str[etBinIdx],
+                                                                             etabins_str[etaBinIdx],
+                                                                             etBinIdx,etaBinIdx)
+                            BeamerMultiFigureSlide( title = title
+                            , paths = paths
+                            , nDivWidth = 2 # x
+                            , nDivHeight = 1 # y
+                            , texts=None
+                            , fortran = False
+                            , usedHeight = 0.6
+                            , usedWidth = 1.
+                            )
+                # prepate table
+                with BeamerSubSection( name = 'Efficiency Values' ):
+                    # Prepare phase space table
+                    lines1 = []
+                    lines1 += [ HLine(_contextManaged = False) ]
+                    lines1 += [ HLine(_contextManaged = False) ]
+                    lines1 += [ TableLine( columns = [''] + [s for s in etabins_str], _contextManaged = False ) ]
+                    lines1 += [ HLine(_contextManaged = False) ]
+                    for etBinIdx in range( len(self.__etbins)-1 ):
+                        values_det = []; values_fa = []
+                        for etaBinIdx in range( len(self.__etabins)-1 ):
+                            # Get the current bin table
+                            current_table = table.loc[ (table.name==name) & (table.et_bin==etBinIdx) & (table.eta_bin==etaBinIdx)]
+                            det = current_table.signal_corrected_eff.values[0] * 100
+                            fa = current_table.background_corrected_eff.values[0] * 100
+                            # Get reference pd
+                            ref = current_table.reference_signal_eff.values[0] * 100
+                            if (det-ref) > 0.0:
+                                values_det.append( ('\\cellcolor[HTML]{9AFF99}%1.2f ($\\uparrow$%1.2f[$\\Delta_{ref}$])')%(det,det-ref) )
+                            elif (det-ref) < 0.0:
+                                values_det.append( ('\\cellcolor[HTML]{F28871}%1.2f ($\\downarrow$%1.2f[$\\Delta_{ref}$])')%(det,det-ref) )
+                            else:
+                                values_det.append( ('\\cellcolor[HTML]{9AFF99}%1.2f')%(det) )
+                            ref = current_table.reference_background_eff.values[0] * 100
+                            factor = fa/ref if ref else 0.
+                            if (fa-ref) > 0.0:
+                                values_fa.append( ('\\cellcolor[HTML]{F28871}%1.2f ($\\rightarrow$%1.2f$\\times\\text{FR}_{ref}$)')%(fa,factor) )
+                            elif (fa-ref) < 0.0:
+                                values_fa.append( ('\\cellcolor[HTML]{9AFF99}%1.2f ($\\rightarrow$%1.2f$\\times\\text{FR}_{ref}$)')%(fa,factor) )
+                            else:
+                                values_fa.append( ('\\cellcolor[HTML]{9AFF99}%1.2f')%(fa) )
+                        lines1 += [ TableLine( columns = [etbins_str[etBinIdx]] + values_det   , _contextManaged = False ) ]
+                        lines1 += [ TableLine( columns = [''] + values_fa , _contextManaged = False ) ]
                         lines1 += [ HLine(_contextManaged = False) ]
-                        lines1 += [ HLine(_contextManaged = False) ]
-                        lines1 += [ TableLine( columns = [''] + [s for s in etabins_str], _contextManaged = False ) ]
-                        lines1 += [ HLine(_contextManaged = False) ]
-
-                        for etBinIdx in range( len(self.__etbins)-1 ):
-
-                            values_det = []; values_fa = []
-                            for etaBinIdx in range( len(self.__etabins)-1 ):
-                                # Get the current bin table
-                                current_table = table.loc[ (table.name==name) & (table.et_bin==etBinIdx) & (table.eta_bin==etaBinIdx)]
-                                det = current_table.signal_corrected_eff.values[0] * 100
-                                fa = current_table.background_corrected_eff.values[0] * 100
-
-                                # Get reference pd
-                                ref = current_table.reference_signal_eff.values[0] * 100
-
-                                if (det-ref) > 0.0:
-                                    values_det.append( ('\\cellcolor[HTML]{9AFF99}%1.2f ($\\uparrow$%1.2f[$\\Delta_{ref}$])')%(det,det-ref) )
-                                elif (det-ref) < 0.0:
-                                    values_det.append( ('\\cellcolor[HTML]{F28871}%1.2f ($\\downarrow$%1.2f[$\\Delta_{ref}$])')%(det,det-ref) )
-                                else:
-                                    values_det.append( ('\\cellcolor[HTML]{9AFF99}%1.2f')%(det) )
-
-                                ref = current_table.reference_background_eff.values[0] * 100
-
-                                factor = fa/ref if ref else 0.
-                                if (fa-ref) > 0.0:
-                                    values_fa.append( ('\\cellcolor[HTML]{F28871}%1.2f ($\\rightarrow$%1.2f$\\times\\text{FR}_{ref}$)')%(fa,factor) )
-                                elif (fa-ref) < 0.0:
-                                    values_fa.append( ('\\cellcolor[HTML]{9AFF99}%1.2f ($\\rightarrow$%1.2f$\\times\\text{FR}_{ref}$)')%(fa,factor) )
-                                else:
-                                    values_fa.append( ('\\cellcolor[HTML]{9AFF99}%1.2f')%(fa) )
-
-                            lines1 += [ TableLine( columns = [etbins_str[etBinIdx]] + values_det   , _contextManaged = False ) ]
-                            lines1 += [ TableLine( columns = [''] + values_fa , _contextManaged = False ) ]
-                            lines1 += [ HLine(_contextManaged = False) ]
-                        lines1 += [ HLine(_contextManaged = False) ]
-
-
-                        # Prepare integrated table
-                        lines2 = []
-                        lines2 += [ HLine(_contextManaged = False) ]
-                        lines2 += [ HLine(_contextManaged = False) ]
-                        lines2 += [ TableLine( columns = ['',r'$P_{D}[\%]$',r'$F_{a}[\%]$'], _contextManaged = False ) ]
-                        lines2 += [ HLine(_contextManaged = False) ]
-
-                        # Get all et/eta bins
-                        current_table = table.loc[table.name==name]
-
-                        # Get reference values
-                        passed_fa = current_table.reference_background_passed.sum()
-                        total_fa = current_table.reference_background_total.sum()
-                        fa = passed_fa/total_fa * 100
-                        passed_det = current_table.reference_signal_passed.sum()
-                        total_det = current_table.reference_signal_total.sum()
-                        det = passed_det/total_det * 100
-
-                        lines2 += [ TableLine( columns = ['Reference','%1.2f (%d/%d)'%(det,passed_det,total_det),
-                                              '%1.2f (%d/%d)'%(fa,passed_fa,total_fa)]  , _contextManaged = False ) ]
-
-
-                        # Get corrected values
-                        passed_fa = current_table.background_corrected_passed.sum()
-                        total_fa = current_table.background_corrected_total.sum()
-                        fa = passed_fa/total_fa * 100
-                        passed_det = current_table.signal_corrected_passed.sum()
-                        total_det = current_table.signal_corrected_total.sum()
-                        det = passed_det/total_det * 100
-
-                        lines2 += [ TableLine( columns = [name.replace('_','\_'),'%1.2f (%d/%d)'%(det,passed_det,total_det),
-                                              '%1.2f (%d/%d)'%(fa,passed_fa,total_fa)]  , _contextManaged = False ) ]
-
-                        # Get non-corrected values
-                        passed_fa = current_table.background_passed.sum()
-                        total_fa = current_table.background_total.sum()
-                        fa = passed_fa/total_fa * 100
-                        passed_det = current_table.signal_passed.sum()
-                        total_det = current_table.signal_total.sum()
-                        det = passed_det/total_det * 100
-
-                        lines2 += [ TableLine( columns = [name.replace('_','\_')+' (not corrected)','%1.2f (%d/%d)'%(det,passed_det,total_det),
-                                                '%1.2f (%d/%d)'%(fa,passed_fa,total_fa)]  , _contextManaged = False ) ]
-
-                        lines2 += [ HLine(_contextManaged = False) ]
-                        lines2 += [ HLine(_contextManaged = False) ]
-
-                        with BeamerSlide( title = "Efficiency Values After Correction"  ):
-                            with Table( caption = '$P_{d}$ and $F_{a}$ for all phase space regions.') as _table:
-                                with ResizeBox( size = 1 ) as rb:
-                                    with Tabular( columns = 'l' + 'c' * len(etabins_str) ) as tabular:
-                                        tabular = tabular
-                                        for line in lines1:
-                                            if isinstance(line, TableLine):
-                                                tabular += line
-                                            else:
-                                                TableLine(line, rounding = None)
-                            with Table( caption = 'Integrated efficiency comparison.') as _table:
-                                with ResizeBox( size = 0.6 ) as rb:
-                                    with Tabular( columns = 'l' + 'c' * 3 ) as tabular:
-                                        tabular = tabular
-                                        for line in lines2:
-                                            if isinstance(line, TableLine):
-                                                tabular += line
-                                            else:
-                                                TableLine(line, rounding = None)
-
+                    lines1 += [ HLine(_contextManaged = False) ]
+                    # Prepare integrated table
+                    lines2 = []
+                    lines2 += [ HLine(_contextManaged = False) ]
+                    lines2 += [ HLine(_contextManaged = False) ]
+                    lines2 += [ TableLine( columns = ['',r'$P_{D}[\%]$',r'$F_{a}[\%]$'], _contextManaged = False ) ]
+                    lines2 += [ HLine(_contextManaged = False) ]
+                    # Get all et/eta bins
+                    current_table = table.loc[table.name==name]
+                    # Get reference values
+                    passed_fa = current_table.reference_background_passed.sum()
+                    total_fa = current_table.reference_background_total.sum()
+                    fa = passed_fa/total_fa * 100
+                    passed_det = current_table.reference_signal_passed.sum()
+                    total_det = current_table.reference_signal_total.sum()
+                    det = passed_det/total_det * 100
+                    lines2 += [ TableLine( columns = ['Reference','%1.2f (%d/%d)'%(det,passed_det,total_det),
+                                          '%1.2f (%d/%d)'%(fa,passed_fa,total_fa)]  , _contextManaged = False ) ]
+                    # Get corrected values
+                    passed_fa = current_table.background_corrected_passed.sum()
+                    total_fa = current_table.background_corrected_total.sum()
+                    fa = passed_fa/total_fa * 100
+                    passed_det = current_table.signal_corrected_passed.sum()
+                    total_det = current_table.signal_corrected_total.sum()
+                    det = passed_det/total_det * 100
+                    lines2 += [ TableLine( columns = [name.replace('_','\_'),'%1.2f (%d/%d)'%(det,passed_det,total_det),
+                                          '%1.2f (%d/%d)'%(fa,passed_fa,total_fa)]  , _contextManaged = False ) ]
+                    # Get non-corrected values
+                    passed_fa = current_table.background_passed.sum()
+                    total_fa = current_table.background_total.sum()
+                    fa = passed_fa/total_fa * 100
+                    passed_det = current_table.signal_passed.sum()
+                    total_det = current_table.signal_total.sum()
+                    det = passed_det/total_det * 100
+                    lines2 += [ TableLine( columns = [name.replace('_','\_')+' (not corrected)','%1.2f (%d/%d)'%(det,passed_det,total_det),
+                                            '%1.2f (%d/%d)'%(fa,passed_fa,total_fa)]  , _contextManaged = False ) ]
+                    lines2 += [ HLine(_contextManaged = False) ]
+                    lines2 += [ HLine(_contextManaged = False) ]
+                    with BeamerSlide( title = "Efficiency Values After Correction"  ):
+                        with Table( caption = '$P_{d}$ and $F_{a}$ for all phase space regions.') as _table:
+                            with ResizeBox( size = 1 ) as rb:
+                                with Tabular( columns = 'l' + 'c' * len(etabins_str) ) as tabular:
+                                    tabular = tabular
+                                    for line in lines1:
+                                        if isinstance(line, TableLine):
+                                            tabular += line
+                                        else:
+                                            TableLine(line, rounding = None)
+                        with Table( caption = 'Integrated efficiency comparison.') as _table:
+                            with ResizeBox( size = 0.6 ) as rb:
+                                with Tabular( columns = 'l' + 'c' * 3 ) as tabular:
+                                    tabular = tabular
+                                    for line in lines2:
+                                        if isinstance(line, TableLine):
+                                            tabular += line
+                                        else:
+                                            TableLine(line, rounding = None)
 
 
 
     #
     # Export all models to keras/onnx using the prometheus format
     #
-    def export( self, models, model_output_format , conf_output, reference_name, to_onnx=False):
+    def export( self, models, model_output_format , conf_output, reference_name, to_onnx=False,
+                max_avgmu = 100, min_avgmu = 0):
 
 
         try:
@@ -522,10 +492,13 @@ class fit_table(Logger):
                 if model['etaBinIdx']!=etaBinIdx:
                     MSG_FATAL(self, 'Model etaBinIdx (%d) is different than etaBinIdx (%d). Abort.', model['etaBinIdx'], etaBinIdx)
 
-                model_etmin_vec.append( model['etBin'][0] )
-                model_etmax_vec.append( model['etBin'][1] )
-                model_etamin_vec.append( model['etaBin'][0] )
-                model_etamax_vec.append( model['etaBin'][1] )
+                model['min_avgmu'] = min_avgmu
+                model['max_avgmu'] = max_avgmu
+
+                model_etmin_vec.append( float(model['etBin'][0]) )
+                model_etmax_vec.append( float(model['etBin'][1]) )
+                model_etamin_vec.append( float(model['etaBin'][0]) )
+                model_etamax_vec.append( float(model['etaBin'][1]) )
                 etBinIdx = model['etBinIdx']
                 etaBinIdx = model['etaBinIdx']
 
@@ -573,7 +546,9 @@ class fit_table(Logger):
         file.SetValue( "Threshold__etamax", list_to_str(model_etamax_vec) )
         file.SetValue( "Threshold__slope" , list_to_str(slopes) )
         file.SetValue( "Threshold__offset", list_to_str(offsets) )
-        file.SetValue( "Threshold__MaxAverageMu", list_to_str([100]*len(model_paths)))
+        file.SetValue( "Threshold__MaxAverageMu", list_to_str([max_avgmu]*len(model_paths)))
+        file.SetValue( "Threshold__MinAverageMu", list_to_str([min_avgmu]*len(model_paths)))
+
         MSG_INFO( self, "Export all tuning configuration to %s.", conf_output)
         file.WriteFile(conf_output)
 
@@ -727,140 +702,39 @@ class fit_table(Logger):
         return outname
 
 
+    @classmethod
+    def create_best_sorts_config_table( cls, best_sort_models ):
 
-#
-# Quick test to dev.
-#
-if __name__ == "__main__":
+        d = collections.OrderedDict({
+             'et_bin':[], 
+             'eta_bin':[], 
+             'sort':[], 
+             'init':[], 
+             'file_name':[],
+             'min_avgmu':[],
+             'max_avgmu':[], 
+             'model_idx':[],
+            })
 
-    from kolmov import crossval_table
+        op_names = best_sort_models[0][0]['thresholds'].keys()
+        for op in op_names:
+            d[op+'_offset'] = []
+            d[op+'_slope']  = []
+    
+        for et_bin in range(len(best_sort_models)):        
+            for eta_bin in range(len(best_sort_models[0])):
+            
+                model = best_sort_models[et_bin][eta_bin]
+                d['et_bin'].append( et_bin )
+                d['eta_bin'].append( eta_bin )
+                d['sort'].append( model['sort'] )
+                d['init'].append( model['init'] )
+                d['file_name'].append( model['file_name'] )
+                d['model_idx'].append( model['model_idx'] )
+                d['min_avgmu'].append( model['min_avgmu'] )
+                d['max_avgmu'].append( model['max_avgmu'] )   
+                for op in op_names:
+                    d[op+'_slope'].append(model['thresholds'][op]['slope'])
+                    d[op+'_offset'].append(model['thresholds'][op]['offset'])
 
-    def create_op_dict(op):
-        d = {
-                  op+'_pd_ref'    : "reference/"+op+"_cutbased/pd_ref#0",
-                  op+'_fa_ref'    : "reference/"+op+"_cutbased/fa_ref#0",
-                  op+'_sp_ref'    : "reference/"+op+"_cutbased/sp_ref",
-                  op+'_pd_val'    : "reference/"+op+"_cutbased/pd_val#0",
-                  op+'_fa_val'    : "reference/"+op+"_cutbased/fa_val#0",
-                  op+'_sp_val'    : "reference/"+op+"_cutbased/sp_val",
-                  op+'_pd_op'     : "reference/"+op+"_cutbased/pd_op#0",
-                  op+'_fa_op'     : "reference/"+op+"_cutbased/fa_op#0",
-                  op+'_sp_op'     : "reference/"+op+"_cutbased/sp_op",
-
-                  # Counts
-                  op+'_pd_ref_passed'    : "reference/"+op+"_cutbased/pd_ref#1",
-                  op+'_fa_ref_passed'    : "reference/"+op+"_cutbased/fa_ref#1",
-                  op+'_pd_ref_total'     : "reference/"+op+"_cutbased/pd_ref#2",
-                  op+'_fa_ref_total'     : "reference/"+op+"_cutbased/fa_ref#2",
-                  op+'_pd_val_passed'    : "reference/"+op+"_cutbased/pd_val#1",
-                  op+'_fa_val_passed'    : "reference/"+op+"_cutbased/fa_val#1",
-                  op+'_pd_val_total'     : "reference/"+op+"_cutbased/pd_val#2",
-                  op+'_fa_val_total'     : "reference/"+op+"_cutbased/fa_val#2",
-                  op+'_pd_op_passed'     : "reference/"+op+"_cutbased/pd_op#1",
-                  op+'_fa_op_passed'     : "reference/"+op+"_cutbased/fa_op#1",
-                  op+'_pd_op_total'      : "reference/"+op+"_cutbased/pd_op#2",
-                  op+'_fa_op_total'      : "reference/"+op+"_cutbased/fa_op#2",
-        }
-        return d
-
-
-    tuned_info = collections.OrderedDict( {
-                  # validation
-                  "max_sp_val"      : 'summary/max_sp_val',
-                  "max_sp_pd_val"   : 'summary/max_sp_pd_val#0',
-                  "max_sp_fa_val"   : 'summary/max_sp_fa_val#0',
-                  # Operation
-                  "max_sp_op"       : 'summary/max_sp_op',
-                  "max_sp_pd_op"    : 'summary/max_sp_pd_op#0',
-                  "max_sp_fa_op"    : 'summary/max_sp_fa_op#0',
-                  } )
-
-    tuned_info.update(create_op_dict('tight'))
-    tuned_info.update(create_op_dict('medium'))
-    tuned_info.update(create_op_dict('loose'))
-    tuned_info.update(create_op_dict('vloose'))
-
-
-    etbins = [15,20,30,40,50,100000]
-    etabins = [0, 0.8 , 1.37, 1.54, 2.37, 2.5]
-
-    cv  = crossval_table( tuned_info, etbins = etbins , etabins = etabins )
-    #cv.fill( '/Volumes/castor/tuning_data/Zee/v10/*.r2/*/*.gz', 'v10')
-    #cv.fill( '/home/jodafons/public/tunings/v10/*.r2/*/*.gz', 'v10')
-    #cv.to_csv( 'v10.csv' )
-    cv.from_csv( 'v10.csv' )
-    best_inits = cv.filter_inits("max_sp_val")
-    best_inits = best_inits.loc[(best_inits.model_idx==0)]
-    best_sorts = cv.filter_sorts(best_inits, 'max_sp_val')
-    best_models = cv.get_best_models(best_sorts, remove_last=True)
-
-
-
-    #
-    # Generator to read, prepare data and get all references
-    #
-    def generator( path ):
-
-        def norm1( data ):
-            norms = np.abs( data.sum(axis=1) )
-            norms[norms==0] = 1
-            return data/norms[:,None]
-        from Gaugi import load
-        import numpy as np
-        d = load(path)
-        feature_names = d['features'].tolist()
-        data = norm1(d['data'][:,1:101])
-        target = d['target']
-        avgmu = d['data'][:,0]
-        references = ['T0HLTElectronT2CaloTight','T0HLTElectronT2CaloMedium','T0HLTElectronT2CaloLoose','T0HLTElectronT2CaloVLoose']
-        ref_dict = {}
-        for ref in references:
-            answers = d['data'][:, feature_names.index(ref)]
-            signal_passed = sum(answers[target==1])
-            signal_total = len(answers[target==1])
-            background_passed = sum(answers[target==0])
-            background_total = len(answers[target==0])
-            pd = signal_passed/signal_total
-            fa = background_passed/background_total
-            ref_dict[ref] = {'signal_passed': signal_passed, 'signal_total': signal_total, 'pd' : pd,
-                             'background_passed': background_passed, 'background_total': background_total, 'fa': fa}
-
-        return data, target, avgmu
-
-
-
-    path = '/Volumes/castor/cern_data/files/Zee/data17_13TeV.AllPeriods.sgn.probes_lhmedium_EGAM1.bkg.VProbes_EGAM7.GRL_v97/data17_13TeV.AllPeriods.sgn.probes_lhmedium_EGAM1.bkg.VProbes_EGAM7.GRL_v97_et{ET}_eta{ETA}.npz'
-    ref_path = '/Volumes/castor/cern_data/files/Zee/data17_13TeV.AllPeriods.sgn.probes_lhmedium_EGAM1.bkg.VProbes_EGAM7.GRL_v97/references/data17_13TeV.AllPeriods.sgn.probes_lhmedium_EGAM1.bkg.VProbes_EGAM7.GRL_v97_et{ET}_eta{ETA}.ref.pic.gz'
-
-    #path = '~/public/cern_data/files/Zee/data17_13TeV.AllPeriods.sgn.probes_lhmedium_EGAM1.bkg.VProbes_EGAM7.GRL_v97/data17_13TeV.AllPeriods.sgn.probes_lhmedium_EGAM1.bkg.VProbes_EGAM7.GRL_v97_et{ET}_eta{ETA}.npz'
-    paths = [[ path.format(ET=et,ETA=eta) for eta in range(5)] for et in range(5)]
-    ref_paths = [[ ref_path.format(ET=et,ETA=eta) for eta in range(5)] for et in range(5)]
-    ref_matrix = [[ {} for eta in range(5)] for et in range(5)]
-    references = ['T0HLTElectronT2CaloTight','T0HLTElectronT2CaloMedium','T0HLTElectronT2CaloLoose','T0HLTElectronT2CaloVLoose']
-    references = ['tight_cutbased', 'medium_cutbased' , 'loose_cutbased', 'vloose_cutbased']
-    from saphyra.core import ReferenceReader
-    for et_bin in range(5):
-        for eta_bin in range(5):
-            for name in references:
-                refObj = ReferenceReader().load(ref_paths[et_bin][eta_bin])
-                pd = refObj.getSgnPassed(name)/refObj.getSgnTotal(name)
-                fa = refObj.getBkgPassed(name)/refObj.getBkgTotal(name)
-                ref_matrix[et_bin][eta_bin][name] = {'pd':pd, 'fa':fa}
-
-
-
-
-    # get best models
-    etbins = [15,20]
-    etabins = [0, 0.8]
-    ct  = fit_table( generator, etbins , etabins, 0.02, 1.5, 16, 60 )
-    ct.fill(paths, best_models, ref_matrix, 'test_dir')
-
-
-    table = ct.table()
-    ct.dump_beamer_table(table, best_models, 'test', 'test')
-
-    ct.export(best_models, 'model_et%d_eta%d', 'config_tight.conf', 'tight_cutbased', to_onnx=True)
-
-
-
+        return pd.DataFrame(d)

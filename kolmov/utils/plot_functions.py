@@ -3,6 +3,7 @@ __all__ = [
     'get_color_fader',
     'training_curves', # should be training_curves for future?
     'plot_quadrant' , # should be plot_quadrant for future?
+    'plot_correction', 
 ]
 
 import os
@@ -12,11 +13,16 @@ import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import rootplotlib as rpl
+import array
 
 from Gaugi import Logger, expand_folders
 from Gaugi.macros import *
+from copy import copy
 
 from kolmov.utils.constants import str_etbins_zee, str_etabins
+from ROOT import kBlackBody, TCanvas, TGraphErrors, TLine, gStyle, kBlue, kBlack
+
 
 
 def get_color_fader( c1, c2, n ):
@@ -225,3 +231,62 @@ def plot_quadrant(df, plot_configs, output_path='/volume'):
         plt.savefig(os.path.join(output_path,
                                 '%s_mini_quad.png' %(ivar)),
                     dpi=300)
+
+
+
+
+
+#
+# Plot 2D histogram function based on ROOT used by fit_table class
+#
+def plot_correction( h2, slope, offset, x_points, y_points, error_points, outname, 
+                     xlabel='',
+                     etBinIdx=None, 
+                     etaBinIdx=None, 
+                     etBins=None,
+                     etaBins=None, 
+                     label='Internal',
+                     ref_value=None, 
+                     pd_value=None,
+                     palette=kBlackBody):
+
+    def toStrBin(etlist = None, etalist = None, etidx = None, etaidx = None):
+        if etlist and etidx is not None:
+            etlist=copy(etlist)
+            if etlist[-1]>9999:  etlist[-1]='#infty'
+            binEt = (str(etlist[etidx]) + ' < E_{T} [GeV] < ' + str(etlist[etidx+1]) if etidx+1 < len(etlist) else
+                                     'E_{T} > ' + str(etlist[etidx]) + ' GeV')
+            return binEt
+        if etalist and etaidx is not None:
+            binEta = (str(etalist[etaidx]) + ' < |#eta| < ' + str(etalist[etaidx+1]) if etaidx+1 < len(etalist) else
+                                        str(etalist[etaidx]) + ' <|#eta| < 2.47')
+            return binEta
+
+    canvas = TCanvas("canvas","canvas",500,500)
+    rpl.set_figure(canvas)
+    gStyle.SetPalette(palette)
+    canvas.SetRightMargin(0.15)
+    canvas.SetTopMargin(0.15)
+    canvas.SetLogz()
+    h2.GetXaxis().SetTitle('Neural Network output (Discriminant)')
+    h2.GetYaxis().SetTitle(xlabel)
+    h2.GetZaxis().SetTitle('Count')
+    h2.Draw('colz')
+    g = TGraphErrors(len(x_points), array.array('d',x_points), array.array('d',y_points), array.array('d',error_points), array.array('d',[0]*len(x_points)))
+    g.SetMarkerColor(kBlue)
+    g.SetMarkerStyle(8)
+    g.SetMarkerSize(1)
+    g.Draw("P same")
+    line = TLine(slope*h2.GetYaxis().GetXmin()+offset,h2.GetYaxis().GetXmin(), slope*h2.GetYaxis().GetXmax()+offset, h2.GetYaxis().GetXmax())
+    line.SetLineColor(kBlack)
+    line.SetLineWidth(2)
+    line.Draw()
+    # Add text labels into the canvas
+    text = toStrBin(etlist=etBins, etidx=etBinIdx)
+    text+= ', '+toStrBin(etalist=etaBins, etaidx=etaBinIdx)
+    if ref_value and pd_value:
+        text+=', P_{D} = %1.2f (%1.2f) [%%]'%(pd_value*100, ref_value*100)
+    rpl.add_text(0.15, 0.885, text, textsize=.03)
+    rpl.set_atlas_label(0.15, 0.94, label)
+    rpl.format_canvas_axes(XLabelSize=16, YLabelSize=16, XTitleOffset=0.87, ZLabelSize=16,ZTitleSize=16, YTitleOffset=0.87, ZTitleOffset=1.1)
+    canvas.SaveAs(outname)

@@ -21,6 +21,8 @@ from . import fit_table
 __all__.extend( fit_table.__all__ )
 from .fit_table import *
 
-
+from . import crossval_fit_table
+__all__.extend( crossval_fit_table.__all__ )
+from .crossval_fit_table import *
 
 
