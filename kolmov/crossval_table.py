@@ -715,7 +715,7 @@ class crossval_table( Logger ):
 
                     if test_table is not None:
                         keys = [ key for key in test_table.columns.values if 'passed' in key or 'total' in key]
-                        current_test_table = test_table.loc[test_table.train_tag=='v8'].agg(dict(zip( keys, ['sum']*len(keys))))
+                        current_test_table = test_table.loc[test_table.train_tag==tag].agg(dict(zip( keys, ['sum']*len(keys))))
                         test_pd = (current_test_table['pd_test_passed']/current_test_table['pd_test_total'])*100
                         test_fa = (current_test_table['fa_test_passed']/current_test_table['fa_test_total'])*100
 

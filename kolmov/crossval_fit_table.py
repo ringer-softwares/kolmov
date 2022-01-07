@@ -141,7 +141,9 @@ class crossval_fit_table(Logger):
                     # prepare all histograms
                     xmin = int(np.percentile(output , xmin_percentage))
                     xmax = int(np.percentile(output , xmax_percentage))
-
+                    if xmin == xmax:
+                        print('xmin == xmax -> \n make xmin = xmax -1 ')
+                        xmin = xmax - 1
                     xbins = int((xmax-xmin)/xbin_size)
                     ybins = int((ymax-ymin)/ybin_size)
 
