@@ -374,7 +374,9 @@ class crossval_table( Logger ):
         tf.config.run_functions_eagerly(False)
 
         columns = best_sorts.columns.values.tolist()
-        extra = ['pd_test', 'fa_test', 'sp_test', 'pd_test_passed', 'pd_test_total', 'fa_test_passed', 'fa_test_total']
+        extra = ['pd_test', 'fa_test', 'sp_test', 'pd_test_passed', 'pd_test_total', 'fa_test_passed', 'fa_test_total',
+                 'pd_ref', 'fa_ref', 'sp_ref', 'pd_ref_passed', 'pd_ref_total', 'fa_ref_passed', 'fa_ref_total']
+
         columns.extend(extra)
         table = collections.OrderedDict({ key:[] for key in columns} )
 
@@ -395,6 +397,7 @@ class crossval_table( Logger ):
                         row = rows.loc[rows.op_name==op_name]
                         data['dec'] = dec_generator( row, data )
 
+                        # test model
                         pd_test_passed = data.loc[(data.target==1) & (data.dec==True)].shape[0]
                         pd_test_total = data.loc[(data.target==1)].shape[0]
                         pd_test = pd_test_passed/pd_test_total
@@ -404,6 +407,18 @@ class crossval_table( Logger ):
                         fa_test = fa_test_passed/fa_test_total
 
                         sp_test = np.sqrt(  np.sqrt(pd_test*(1-fa_test)) * (0.5*(pd_test+(1-fa_test)))  )
+
+                        # reference
+                        pd_ref_passed = data.loc[(data.target==1) & (data['trig_L2_cl_%s' %op_name]==True)].shape[0]
+                        pd_ref_total = data.loc[(data.target==1)].shape[0]
+                        pd_ref = pd_ref_passed/pd_ref_total
+
+                        fa_ref_passed = data.loc[(data.target!=1) & (data['trig_L2_cl_%s' %op_name]==True)].shape[0]
+                        fa_ref_total = data.loc[(data.target!=1)].shape[0]
+                        fa_ref = fa_ref_passed/fa_ref_total
+
+                        sp_ref = np.sqrt(  np.sqrt(pd_ref*(1-fa_ref)) * (0.5*(pd_ref+(1-fa_ref)))  )
+
 
                         for col in columns:
                             if col in extra:
@@ -600,7 +615,9 @@ class crossval_table( Logger ):
     #
     # Create the beamer table file
     #
-    def dump_beamer_table( self, best_inits, output, tags=None, title='' , test_table=None):
+    def dump_beamer_table( self, best_inits, output, tags=None, title='' , cv_tag_name=None, 
+                           tuning_ref_name=None, test_table=None,
+                           test_name=None, test_ref_name=None):
         '''
         This method will use a pandas Dataframe in order to create a beamer presentation which summary the tuning cross-validation.
 
@@ -611,7 +628,25 @@ class crossval_table( Logger ):
         - tags: the training tag that will be used. If None then the tags will be get from the Dataframe.
         - title: the pdf title
         '''
+        if tuning_ref_name:
+            ref_name = tuning_ref_name
+        else:
+            ref_name = 'Reference'
 
+        if cv_tag_name:
+            cv_tag = cv_tag_name
+        else:
+            cv_tag = 'Cross Val.'
+
+        if test_name:
+            t_name = test_name
+        else:
+            t_name = 'Test'
+
+        if test_ref_name:
+            t_ref_name = test_ref_name
+        else:
+            t_ref_name = 'Ref. Test'
         cv_table = self.describe( best_inits )
         # Create Latex Et bins
         etbins_str = []; etabins_str = []
@@ -649,13 +684,13 @@ class crossval_table( Logger ):
                 lines1 += [ HLine(_contextManaged = False) ]
                 lines1 += [ TableLine( columns = ['','','kinematic region'] + reduce(lambda x,y: x+y,[['',s,''] for s in etbins_str]), _contextManaged = False ) ]
                 lines1 += [ HLine(_contextManaged = False) ]
-                lines1 += [ TableLine( columns = ['Det. Region','Method','Type'] + reduce(lambda x,y: x+y,[[colorPD+r'$P_{D}[\%]$',colorSP+r'$SP[\%]$',colorPF+r'$P_{F}[\%]$'] \
+                lines1 += [ TableLine( columns = ['Det. Region','Method','Type'] + reduce(lambda x,y: x+y,[[colorPD+r'$P_{D}[\%]$',colorSP+r'$SP[\%]$',colorPF+r'$F_{R}[\%]$'] \
                                       for _ in etbins_str]), _contextManaged = False ) ]
                 lines1 += [ HLine(_contextManaged = False) ]
 
                 for etaBinIdx in cv_table.eta_bin.unique():
                     for idx, tag in enumerate( train_tags ):
-                        cv_values=[]; ref_values=[]; test_values=[]
+                        cv_values=[]; ref_values=[]; test_values=[]; test_ref_values=[]
                         for etBinIdx in cv_table.et_bin.unique():
                             current_table = cv_table.loc[ (cv_table.train_tag==tag) & (cv_table.et_bin==etBinIdx) & (cv_table.eta_bin==etaBinIdx) ]
                             sp = current_table['sp_val_mean'].values[0]*100
@@ -677,21 +712,31 @@ class crossval_table( Logger ):
                                 sp = current_test_table['sp_test'].values[0]*100
                                 fa = current_test_table['fa_test'].values[0]*100
                                 test_values   += [ colorPD+('%1.2f')%(pd),colorSP+('%1.2f')%(sp),colorPF+('%1.2f')%(fa)    ]
+                                # reference
+                                pd_r = current_test_table['pd_ref'].values[0]*100
+                                sp_r = current_test_table['sp_ref'].values[0]*100
+                                fa_r = current_test_table['fa_ref'].values[0]*100
+                                test_ref_values += [ colorPD+('%1.2f')%(pd_r),colorSP+('%1.2f')%(sp_r),colorPF+('%1.2f')%(fa_r)    ]
 
                         if idx > 0:
-                            lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Cross Val.'] + cv_values   , _contextManaged = False ) ]
-                        
+                            lines1 += [ TableLine( columns = ['', tuning_names[idx+1], cv_tag] + cv_values ,
+                                                  _contextManaged = False ) ]
                         
                             if test_table is not None:
-                                lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Test'] + test_values   , _contextManaged = False ) ]
+                                lines1 += [ HLine(_contextManaged = False) ]
+                                lines1 += [ TableLine( columns = ['', '', t_ref_name] + test_ref_values   , _contextManaged = False ) ]
+                                lines1 += [ TableLine( columns = ['', tuning_names[idx+1], t_name] + test_values   , _contextManaged = False ) ]
                     
                         
                         else:
-                            lines1 += [ TableLine( columns = ['\multirow{%d}{*}{'%(len(tuning_names))+etabins_str[etaBinIdx]+'}',tuning_names[idx], 'Reference'] + ref_values   ,
+                            lines1 += [ TableLine( columns = ['\multirow{%d}{*}{'%(len(tuning_names))+etabins_str[etaBinIdx]+'}',tuning_names[idx], ref_name] + ref_values ,
                                                 _contextManaged = False ) ]
-                            lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Cross Val.'] + cv_values    , _contextManaged = False ) ]
+                            lines1 += [ TableLine( columns = ['', tuning_names[idx+1], cv_tag] + cv_values    , _contextManaged = False ) ]
+
                             if test_table is not None:
-                                lines1 += [ TableLine( columns = ['', tuning_names[idx+1], 'Test'] + test_values   , _contextManaged = False ) ]
+                                lines1 += [ HLine(_contextManaged = False) ]
+                                lines1 += [ TableLine( columns = ['', '', t_ref_name] + test_ref_values   , _contextManaged = False ) ]
+                                lines1 += [ TableLine( columns = ['', tuning_names[idx+1], t_name] + test_values   , _contextManaged = False ) ]
                     
                     lines1 += [ HLine(_contextManaged = False) ]
                 lines1 += [ HLine(_contextManaged = False) ]
@@ -701,7 +746,7 @@ class crossval_table( Logger ):
                 lines2 = []
                 lines2 += [ HLine(_contextManaged = False) ]
                 lines2 += [ HLine(_contextManaged = False) ]
-                lines2 += [ TableLine( columns = ['',colorPD+r'$P_{D}[\%]$',colorPF+r'$F_{a}[\%]$'], _contextManaged = False ) ]
+                lines2 += [ TableLine( columns = ['',colorPD+r'$P_{D}[\%]$',colorPF+r'$F_{R}[\%]$'], _contextManaged = False ) ]
                 lines2 += [ HLine(_contextManaged = False) ]
                 for idx, tag in enumerate( train_tags ):
                     current_table = self.integrate( best_inits, tag )
@@ -716,29 +761,41 @@ class crossval_table( Logger ):
                     if test_table is not None:
                         keys = [ key for key in test_table.columns.values if 'passed' in key or 'total' in key]
                         current_test_table = test_table.loc[test_table.train_tag==tag].agg(dict(zip( keys, ['sum']*len(keys))))
+                        # ringer
                         test_pd = (current_test_table['pd_test_passed']/current_test_table['pd_test_total'])*100
                         test_fa = (current_test_table['fa_test_passed']/current_test_table['fa_test_total'])*100
+                        # ref test
+                        test_r_pd = (current_test_table['pd_ref_passed']/current_test_table['pd_ref_total'])*100
+                        test_r_fa = (current_test_table['fa_ref_passed']/current_test_table['fa_ref_total'])*100
 
                     if idx > 0:
-                        lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (Cross Val.)' ,
+                        lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (%s)' %(cv_tag) ,
                           colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std) ], _contextManaged = False ) ]
                     
                         if test_table is not None:
-                            lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (Test)',
+                            lines1 += [ HLine(_contextManaged = False) ]
+                            lines2 += [ TableLine( columns = [t_ref_name,
+                            colorPD+('%1.2f')%(test_r_pd),colorPF+('%1.2f')%(test_r_fa) ], _contextManaged = False ) ]
+                            
+                            lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (%s)' %(t_name),
                             colorPD+('%1.2f')%(test_pd),colorPF+('%1.2f')%(test_fa) ], _contextManaged = False ) ]
                     
                     else:
-                        lines2 += [ TableLine( columns = ['Ref.' ,colorPD+('%1.2f')%(pd_ref),colorPF+('%1.2f')%(fa_ref) ], _contextManaged = False ) ]
-                        lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (Cross Val.)',
+                        lines2 += [ TableLine( columns = [ref_name ,colorPD+('%1.2f')%(pd_ref),colorPF+('%1.2f')%(fa_ref) ], _contextManaged = False ) ]
+                        lines2 += [ TableLine( columns = [tag.replace('_','\_') + ' (%s)' %(cv_tag),
                                     colorPD+('%1.2f$\pm$%1.2f')%(pd,pd_std),colorPF+('%1.2f$\pm$%1.2f')%(fa,fa_std) ], _contextManaged = False ) ]
                         if test_table is not None:
-                            lines2 += [ TableLine( columns = [tag.replace('_','\_')+ ' (Test)' ,
+                            lines1 += [ HLine(_contextManaged = False) ]
+                            lines2 += [ TableLine( columns = [t_ref_name,
+                            colorPD+('%1.2f')%(test_r_pd),colorPF+('%1.2f')%(test_r_fa) ], _contextManaged = False ) ]
+
+                            lines2 += [ TableLine( columns = [tag.replace('_','\_')+ ' (%s)' %(t_name) ,
                             colorPD+('%1.2f')%(test_pd),colorPF+('%1.2f')%(test_fa) ], _contextManaged = False ) ]
                     
 
                 # Create all tables into the PDF Latex
                 with BeamerSlide( title = "The Cross Validation Efficiency Values For All Tunings"  ):
-                    with Table( caption = 'The $P_{d}$, $F_{a}$ and $SP $ values for each phase space for each method.') as table:
+                    with Table( caption = r'The $P_{D}$, $F_{R}$ and $SP $ values for each phase space for each method.') as table:
                         with ResizeBox( size = 1. ) as rb:
                             with Tabular( columns = '|lcc|' + 'ccc|' * len(etbins_str) ) as tabular:
                                 tabular = tabular
