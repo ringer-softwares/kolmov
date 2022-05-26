@@ -24,7 +24,7 @@ setup(
         "matplotlib==3.5.1",
         "seaborn==0.11.2",
         "Gaugi>=1.0.0",
-        "tensorflow==2.3.1",
+        "tensorflow==2.7.2",
         "scikit-learn==1.0.2",
         "onnxruntime==1.8.0",
         "keras2onnx==1.7.0"
