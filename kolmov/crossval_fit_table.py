@@ -82,8 +82,11 @@ class crossval_fit_table(Logger):
         self.__input_generator = input_generator
         self.__kf = kf
         self.__model_generator = model_generator
+        self.fit_info   = {}
 
-
+    
+    def get_fit_info(self):
+        return self.fit_info
 
 
     def fill( self, best_inits, paths, ref_values, xbin_size=0.05, ybin_size=0.5, 
@@ -180,7 +183,10 @@ class crossval_fit_table(Logger):
 
                     # Loop over all operation points
                     for op_name in best_inits_bin.op_name.unique():
-                    
+                        # create the info dict
+                        info_key = 'et%i_eta%i_sort%i_%s' %(et_bin, eta_bin, sort, op_name)
+                        self.fit_info[info_key] = {}
+                        
                         row = best_inits_bin.loc[ (best_inits_bin.sort==sort) &
                                                   (best_inits_bin.op_name==op_name) ]
                         init = row.init.values[0]
@@ -211,6 +217,10 @@ class crossval_fit_table(Logger):
                         pd_train_passed = df_train.loc[(df_train.target==True) & (df_train.dec==True)].shape[0]
                         pd_train_total  = df_train.loc[(df_train.target==True)].shape[0]
                         pd_train        = pd_train_passed/pd_train_total
+                        
+                        self.fit_info[info_key]['slope']  = slope
+                        self.fit_info[info_key]['offset'] = offset
+                        self.fit_info[info_key]['points'] = info
 
                         #
                         # Validation

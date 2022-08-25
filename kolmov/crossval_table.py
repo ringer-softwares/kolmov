@@ -106,14 +106,13 @@ class crossval_table( Logger ):
 
         MSG_INFO(self, 'There are %i files for this task...' %(len(paths)))
         MSG_INFO(self, 'Filling the table... ')
-
         for ituned_file_name in progressbar( paths , 'Reading %s...'%tag):
             #for ituned_file_name in paths:
 
             try:
                 gfile = load(ituned_file_name)
             except:
-                #MSG_WARNING(self, "File %s not open. skip.", ituned_file_name)
+                MSG_WARNING(self, "File %s not open. skip.", ituned_file_name)
                 continue
             tuned_file = gfile['tunedData']
 
