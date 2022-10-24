@@ -22,7 +22,7 @@ setup(
         "numpy>=1.16.6,<2.0a0",
         "pandas==1.3.5",
         "matplotlib==3.5.1",
-        "seaborn==0.11.2",
+        "seaborn==0.12.1",
         "Gaugi>=1.0.0",
         "tensorflow==2.3.1",
         "scikit-learn==1.0.2",
