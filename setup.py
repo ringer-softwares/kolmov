@@ -26,7 +26,7 @@ setup(
         "Gaugi>=1.0.0",
         "tensorflow==2.3.1",
         "scikit-learn==1.0.2",
-        "onnxruntime==1.8.0",
+        "onnxruntime==1.14.0",
         "keras2onnx==1.7.0"
     ],
     classifiers=[
